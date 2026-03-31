@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import os
 import tempfile
+import re
 from datetime import datetime
 from pypdf import PdfReader
 from docx import Document
@@ -157,11 +158,13 @@ def clean_resume_text(text):
     # Remove markdown formatting
     text = text.replace('**', '').replace('##', '').replace('#', '').replace('###', '')
     
-    # Remove double commas and fix spacing
-    import re
+    # Fix double commas and spacing issues
     text = re.sub(r',,+', ',', text)  # Replace multiple commas with single
     text = re.sub(r'\s+,', ',', text)  # Remove space before comma
     text = re.sub(r',\s+', ', ', text)  # Ensure single space after comma
+    
+    # Fix double spaces
+    text = re.sub(r' {2,}', ' ', text)
     
     # Normalize bullet points
     text = text.replace('■', '•').replace('–', '-').replace('—', '|')
@@ -169,6 +172,17 @@ def clean_resume_text(text):
     # Remove multiple dashes used as separators
     text = re.sub(r'\n---+\n', '\n', text)
     text = re.sub(r'^---+\s*$', '', text, flags=re.MULTILINE)
+    
+    # Remove lines with only special characters
+    lines = text.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        stripped = line.strip()
+        # Skip lines that are just bullets, dashes, or very short
+        if stripped and len(stripped) > 2 and not re.match(r'^[•\-–—\|]+$', stripped):
+            cleaned_lines.append(line)
+    
+    text = '\n'.join(cleaned_lines)
     
     # Remove extra blank lines (more than 2 consecutive)
     text = re.sub(r'\n{3,}', '\n\n', text)
@@ -328,7 +342,8 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             'last updated:',
             'optimization notes',
             'ai-generated',
-            'meta-instructional'
+            'meta-instructional',
+            'functional skills:'  # Skip the all-caps functional skills header
         ]
         
         for line in lines:
@@ -414,11 +429,11 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             
             # Domain Expertise - Comma-separated with clean formatting
             if current_section == 'domain expertise':
-                # Clean up: remove double commas, extra spaces
+                # Clean up: remove double commas, extra spaces, normalize
                 domains = [d.strip() for d in line_clean.replace('  ', ' ').split(',') if d.strip() and len(d.strip()) > 2]
                 # Rejoin with proper comma spacing
                 domain_line = ', '.join(domains)
-                if domain_line:
+                if domain_line and len(domain_line) > 5:  # Only add if meaningful content
                     story.append(Paragraph(domain_line, style_domain))
                 continue
             
@@ -435,7 +450,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                         story.append(Paragraph(line_clean, style_content))
                 elif line_clean.startswith('•') or line_clean.startswith('-'):
                     content = line_clean[1:].strip()
-                    if content:  # Only add if there's actual content
+                    if content and len(content) > 10:  # Only add if there's actual content
                         bullet_text = f"• {content}"
                         story.append(Paragraph(bullet_text, style_bullet))
                 else:
@@ -448,7 +463,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(line_clean, style_content))
                 elif line_clean.startswith('•') or line_clean.startswith('-'):
                     content = line_clean[1:].strip()
-                    if content:
+                    if content and len(content) > 10:
                         story.append(Paragraph(f"• {content}", style_bullet))
                 else:
                     story.append(Paragraph(line_clean, style_content))
@@ -458,7 +473,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             if current_section == 'certifications':
                 if line_clean.startswith('•') or line_clean.startswith('-') or line_clean.startswith('■') or line_clean.startswith('🏅'):
                     content = line_clean[1:].strip()
-                    if content:
+                    if content and len(content) > 10:
                         story.append(Paragraph(f"• {content}", style_bullet))
                 else:
                     story.append(Paragraph(line_clean, style_content))
@@ -470,7 +485,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     content = line_clean.replace('**', '').strip()
                     if content.startswith('-') or content.startswith('•'):
                         content = content[1:].strip()
-                    if content:
+                    if content and len(content) > 5:
                         story.append(Paragraph(f"• {content}", style_bullet))
                 else:
                     story.append(Paragraph(line_clean, style_content))
@@ -480,7 +495,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             if current_section == 'key projects':
                 if line_clean.startswith('•') or line_clean.startswith('-') or line_clean.startswith('■') or line_clean.startswith('📌'):
                     content = line_clean[1:].strip()
-                    if content:
+                    if content and len(content) > 10:
                         story.append(Paragraph(f"• {content}", style_bullet))
                 else:
                     story.append(Paragraph(line_clean, style_content))
@@ -618,6 +633,8 @@ OUTPUT FORMAT RULES (CRITICAL):
 5. NO meta-instructional text
 6. Use standard bullet points (•) consistently
 7. Clean, professional formatting only
+8. NO all-caps section headers in content (like "FUNCTIONAL SKILLS:")
+9. Proper spacing between sections
 
 STRATEGIC APPROACH FOR 85%+ MATCH:
 
@@ -667,6 +684,7 @@ FORMATTING RULES:
 - NO meta-instructional text
 - NO double commas (,,)
 - NO separator lines (---)
+- NO all-caps text in content sections
 - OUTPUT ONLY THE RESUME CONTENT - no explanations, no notes
 
 DOMAIN EXPERTISE EXAMPLE (CORRECT FORMAT):
@@ -689,6 +707,7 @@ CRITICAL OUTPUT RULES:
 - OUTPUT ONLY RESUME CONTENT - no footers, no notes, no AI comments
 - NO double commas anywhere
 - NO markdown formatting
+- NO all-caps section headers in content
 """
 
 RESUME_GEN_USER_PROMPT = """
@@ -755,6 +774,7 @@ INSTRUCTIONS FOR 85%+ MATCH:
    - NO double commas (,,)
    - NO markdown formatting (**, ##, #)
    - NO separator lines (---)
+   - NO all-caps text in content sections
    - Just the clean resume following Priya Sharma template
 
 Generate the ATS-optimized resume following this exact structure to achieve 85%+ match.
