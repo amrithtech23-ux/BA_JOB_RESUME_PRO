@@ -14,7 +14,7 @@ from reportlab.lib.units import inch
 from reportlab.lib.colors import black, gray
 
 # ============================================
-# Page Configuration - Sidebar Collapsed
+# Page Configuration
 # ============================================
 st.set_page_config(
     page_title="Business Analyst Job Apply Pro",
@@ -24,7 +24,7 @@ st.set_page_config(
 )
 
 # ============================================
-# Custom CSS - Hide Sidebar
+# Custom CSS
 # ============================================
 st.markdown("""
     <style>
@@ -89,26 +89,56 @@ if 'processing' not in st.session_state:
 # Helper Functions
 # ============================================
 
+def clean_text_for_api(text):
+    """Clean text before sending to API - remove problematic characters."""
+    if not text:
+        return ""
+    
+    # Remove or replace problematic characters
+    text = text.replace('\x00', '')  # Null characters
+    text = text.replace('\x1b', '')  # Escape characters
+    text = text.replace('\f', '')    # Form feed
+    text = text.replace('\v', '')    # Vertical tab
+    
+    # Normalize line endings
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    
+    # Remove excessive whitespace
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r' {2,}', ' ', text)
+    
+    # Remove control characters
+    text = ''.join(char for char in text if ord(char) >= 32 or char in '\n\t')
+    
+    return text.strip()
+
 def extract_text_from_file(uploaded_file):
-    """Extracts text from PDF, DOCX, or TXT files."""
+    """Extracts text from PDF, DOCX, or TXT files with better error handling."""
     try:
         text = ""
-        if uploaded_file.name.endswith('.pdf'):
+        file_extension = uploaded_file.name.lower().split('.')[-1]
+        
+        if file_extension == 'pdf':
             reader = PdfReader(uploaded_file)
             for page in reader.pages:
                 extracted = page.extract_text()
                 if extracted:
                     text += extracted + "\n"
-        elif uploaded_file.name.endswith('.docx'):
+        elif file_extension == 'docx':
             doc = Document(uploaded_file)
             for para in doc.paragraphs:
                 if para.text.strip():
                     text += para.text + "\n"
-        elif uploaded_file.name.endswith('.txt'):
-            text = uploaded_file.read().decode("utf-8")
+        elif file_extension == 'txt':
+            text = uploaded_file.read().decode("utf-8", errors='ignore')
         else:
+            st.error(f"❌ Unsupported file type: .{file_extension}")
             return None
+        
+        # Clean the extracted text
+        text = clean_text_for_api(text)
         return text.strip()
+    
     except Exception as e:
         st.error(f"❌ Error reading file: {str(e)}")
         return None
@@ -125,7 +155,7 @@ def get_api_key():
                         key=f"api_key_input_{st.session_state.reset_counter}")
 
 def test_api_connection(api_key):
-    """Test API connection with a simple request."""
+    """Test if API key is valid."""
     try:
         url = "https://openrouter.ai/api/v1/auth/key"
         headers = {"Authorization": f"Bearer {api_key}"}
@@ -144,7 +174,27 @@ def test_api_connection(api_key):
         return False
 
 def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.5-72b-instruct", max_tokens=4000):
-    """Calls OpenRouter API using Qwen model with robust error handling."""
+    """Calls OpenRouter API with comprehensive error handling."""
+    
+    # Validate inputs
+    if not prompt or not prompt.strip():
+        st.error("❌ Error: Prompt is empty")
+        return None
+    
+    if not system_instruction or not system_instruction.strip():
+        st.error("❌ Error: System instruction is empty")
+        return None
+    
+    # Check prompt length (OpenRouter has limits)
+    prompt_length = len(prompt) + len(system_instruction)
+    max_safe_length = 100000  # Conservative limit
+    
+    if prompt_length > max_safe_length:
+        st.warning(f"⚠️ Prompt is very long ({prompt_length} chars). Truncating...")
+        # Truncate prompt while keeping important parts
+        max_prompt_length = max_safe_length - len(system_instruction) - 1000
+        prompt = prompt[:max_prompt_length] + "\n\n[Content truncated due to length]"
+    
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -164,27 +214,38 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
     }
     
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=120)
+        with st.spinner("🔄 Sending request to API..."):
+            response = requests.post(url, headers=headers, json=payload, timeout=120)
         
-        # Detailed error logging
+        # Detailed error handling
         if response.status_code != 200:
-            error_detail = response.text[:500] if response.text else "No error details"
-            st.error(f"❌ API Error ({response.status_code}): {error_detail}")
+            error_text = response.text[:500] if response.text else "No error details"
             
-            # Specific error handling
+            st.error(f"❌ API Error ({response.status_code})")
+            
             if response.status_code == 401:
                 st.error("🔑 Authentication failed. Please check your API key.")
+                st.info("💡 **Fix:** Go to Settings → Test API Connection or update your API key")
             elif response.status_code == 400:
                 st.error("📝 Bad request. The request format may be invalid.")
+                st.info("💡 **Fix:** Try uploading a different resume or shortening the job description")
             elif response.status_code == 429:
-                st.error("⏱️ Rate limit exceeded. Please wait a moment and try again.")
+                st.error("⏱️ Rate limit exceeded. Please wait 60 seconds and try again.")
             elif response.status_code == 500:
                 st.error("🔧 Server error. The API service may be temporarily unavailable.")
+            else:
+                st.error(f"Error details: {error_text}")
             
             return None
         
-        result = response.json()
+        # Parse response
+        try:
+            result = response.json()
+        except:
+            st.error("❌ Failed to parse API response")
+            return None
         
+        # Validate response structure
         if 'choices' not in result:
             st.error(f"❌ Unexpected API response structure: {result}")
             return None
@@ -192,26 +253,22 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
         if not result['choices']:
             st.error("❌ API returned empty choices")
             return None
-            
+        
         if 'message' not in result['choices'][0]:
             st.error("❌ API response missing message field")
             return None
-            
-        return result['choices'][0]['message']['content']
         
+        return result['choices'][0]['message']['content']
+    
     except requests.exceptions.Timeout:
-        st.error("⏱️ Request timed out. The API is taking too long. Please try again.")
+        st.error("⏱️ Request timed out (120 seconds). The API is taking too long.")
+        st.info("💡 **Try:** Using a smaller resume or shorter job description")
         return None
     except requests.exceptions.ConnectionError:
         st.error("🌐 Connection error. Please check your internet connection.")
         return None
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Request error: {str(e)}")
-        return None
     except Exception as e:
         st.error(f"❌ Unexpected error: {str(e)}")
-        import traceback
-        st.code(traceback.format_exc())
         return None
 
 def clean_resume_text(text):
@@ -222,18 +279,16 @@ def clean_resume_text(text):
     # Remove markdown formatting
     text = text.replace('**', '').replace('##', '').replace('#', '').replace('###', '')
     
-    # Fix double commas and spacing issues
+    # Fix double commas and spacing
     text = re.sub(r',,+', ',', text)
     text = re.sub(r'\s+,', ',', text)
     text = re.sub(r',\s+', ', ', text)
-    
-    # Fix double spaces
     text = re.sub(r' {2,}', ' ', text)
     
-    # Normalize bullet points
+    # Normalize bullets
     text = text.replace('■', '•').replace('–', '-').replace('—', '|')
     
-    # Remove multiple dashes used as separators
+    # Remove separators
     text = re.sub(r'\n---+\n', '\n', text)
     text = re.sub(r'^---+\s*$', '', text, flags=re.MULTILINE)
     
@@ -246,8 +301,6 @@ def clean_resume_text(text):
             cleaned_lines.append(line)
     
     text = '\n'.join(cleaned_lines)
-    
-    # Remove extra blank lines
     text = re.sub(r'\n{3,}', '\n\n', text)
     
     return text.strip()
@@ -270,7 +323,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         
         styles = getSampleStyleSheet()
         
-        # Custom Styles
+        # Styles
         style_title = ParagraphStyle(
             'TitleStyle',
             parent=styles['Heading1'],
@@ -539,7 +592,7 @@ Job Description:
 Generate validation report in this EXACT format:
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                 IT-BUSINESS ANALYST RESUME VALIDATION REPORT                  ║
+║                 IT-BUSINESS ANALYST RESUME VALIDATION REPORT                 ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║   Candidate: [Name]                                                          ║
@@ -549,11 +602,11 @@ Generate validation report in this EXACT format:
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║   🎯 OVERALL ELIGIBILITY: [XX]%                                              ║
-║   ✅ GOOD MATCH - RECOMMENDED                                                 ║
+║   ✅ GOOD MATCH - RECOMMENDED                                                ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║   📈 SCORE BREAKDOWN:                                                         ║
+║   📈 SCORE BREAKDOWN:                                                        ║
 ║                                                                              ║
 ║   • Education:           [XX]%                                               ║
 ║   • Functional Skills:   [XX]%                                               ║
@@ -561,23 +614,23 @@ Generate validation report in this EXACT format:
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║   🔍 DETAILED ANALYSIS:                                                       ║
+║   🔍 DETAILED ANALYSIS:                                                      ║
 ║                                                                              ║
-║   ✅ Matched Skills:                                                          ║
-║      • [List skills]                                                          ║
+║   ✅ Matched Skills:                                                         ║
+║      • [List skills]                                                         ║
 ║                                                                              ║
-║   ❌ Missing Skills:                                                          ║
-║      • [List skills]                                                          ║
+║   ❌ Missing Skills:                                                         ║
+║      • [List skills]                                                         ║
 ║                                                                              ║
-║   ✅ Matched Experience:                                                      ║
-║      • [List experience]                                                      ║
+║   ✅ Matched Experience:                                                     ║
+║      • [List experience]                                                     ║
 ║                                                                              ║
-║   ❌ Missing Experience:                                                      ║
-║      • [List gaps]                                                            ║
+║   ❌ Missing Experience:                                                     ║
+║      • [List gaps]                                                           ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║   💡 RECOMMENDATIONS:                                                         ║
+║   💡 RECOMMENDATIONS:                                                        ║
 ║   1. [Recommendation 1]                                                      ║
 ║   2. [Recommendation 2]                                                      ║
 ║   3. [Recommendation 3]                                                      ║
@@ -734,10 +787,13 @@ def main():
                 with st.spinner("🔍 Analyzing resume against job description..."):
                     st.session_state.processing = True
                     
-                    # Prepare prompt
+                    # Prepare prompt with size limits
+                    resume_text = st.session_state.resume_text[:3000]  # Limit to 3000 chars
+                    jd_text_limited = jd_text[:2000]  # Limit to 2000 chars
+                    
                     prompt = VALIDATION_USER_PROMPT.format(
-                        resume_text=st.session_state.resume_text[:3000],  # Limit size
-                        jd_text=jd_text[:2000]  # Limit size
+                        resume_text=resume_text,
+                        jd_text=jd_text_limited
                     )
                     
                     # Call API
@@ -756,8 +812,8 @@ def main():
                         st.success("✅ Validation complete!")
                         st.rerun()
                     else:
-                        st.error("❌ Failed to generate validation report. Please check your API key and try again.")
-                        st.info("💡 **Troubleshooting:**\n- Verify your API key is valid\n- Check your API credits at openrouter.ai\n- Try a different model\n- Reduce the size of your resume/JD")
+                        st.error("❌ Failed to generate validation report.")
+                        st.info("💡 **Troubleshooting:**\n- Click 'Test API Connection' in sidebar\n- Check your API credits at openrouter.ai\n- Try a different model (e.g., openai/gpt-3.5-turbo)\n- Shorten your resume or job description")
         
         # Display Validation Report
         if st.session_state.validation_report:
@@ -779,9 +835,13 @@ def main():
                 if st.button("✨ Generate ATS Optimized Resume", type="primary",
                            key=f"generate_btn_{st.session_state.reset_counter}"):
                     with st.spinner("✍️ Generating new ATS-optimized resume..."):
+                        # Prepare prompt with size limits
+                        resume_text = st.session_state.resume_text[:4000]
+                        jd_text_limited = jd_text[:3000]
+                        
                         prompt = RESUME_GEN_USER_PROMPT.format(
-                            resume_text=st.session_state.resume_text[:4000],
-                            jd_text=jd_text[:3000]
+                            resume_text=resume_text,
+                            jd_text=jd_text_limited
                         )
                         
                         new_resume = call_openrouter_api(
@@ -797,7 +857,8 @@ def main():
                             st.success("✅ Resume generated successfully!")
                             st.rerun()
                         else:
-                            st.error("❌ Failed to generate resume. Please try again.")
+                            st.error("❌ Failed to generate resume.")
+                            st.info("💡 **Troubleshooting:**\n- Check your API credits\n- Try a different model\n- Shorten the inputs\n- Wait 60 seconds if rate limited")
     
     elif uploaded_file and not jd_text:
         st.info("📝 **Please paste the Job Description to proceed.**")
