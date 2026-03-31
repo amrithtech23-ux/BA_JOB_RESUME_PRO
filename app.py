@@ -134,9 +134,10 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
 
 def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
     """
-    Generates ATS-friendly PDF with custom formatting:
-    - Professional Summary & Domain Expertise: Justified alignment
-    - Professional Experience, Skills, Projects, Education: Table-like left alignment
+    Generates ATS-friendly PDF with fixed formatting:
+    - Professional Summary & Domain Expertise: Justified alignment with proper spacing
+    - Professional Experience, Skills, Projects, Education: Left-aligned table-style
+    - Fixed bullet points and consistent indentation
     """
     try:
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
@@ -158,43 +159,57 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         # Custom Styles - ATS Optimized
         # ============================================
         
-        # Justified alignment for Professional Summary & Domain Expertise
+        # Justified alignment for Professional Summary
         style_justified = ParagraphStyle(
             'JustifiedNormal',
             parent=styles['Normal'],
             fontName='Helvetica',
             fontSize=10,
-            leading=12,
+            leading=13,
             alignment=TA_JUSTIFY,
-            spaceAfter=6,
+            spaceAfter=8,
             leftIndent=0,
             rightIndent=0
         )
         
-        # Left-aligned style for table-like sections (indented for visual structure)
+        # Domain Expertise - comma-separated with proper spacing
+        style_domain = ParagraphStyle(
+            'DomainExpertise',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=10,
+            leading=14,
+            alignment=TA_LEFT,
+            spaceAfter=10,
+            leftIndent=0,
+            rightIndent=0
+        )
+        
+        # Left-aligned style for table-like sections (consistent indentation)
         style_left_table = ParagraphStyle(
             'LeftTable',
             parent=styles['Normal'],
             fontName='Helvetica',
             fontSize=10,
-            leading=12,
+            leading=13,
             alignment=TA_LEFT,
-            spaceAfter=4,
-            leftIndent=15,  # Indent for table-like appearance
-            bulletIndent=25
+            spaceAfter=5,
+            leftIndent=20,
+            bulletIndent=30
         )
         
-        # Section header style with underline effect
+        # Section header style
         style_heading = ParagraphStyle(
             'SectionHeading',
             parent=styles['Heading2'],
             fontName='Helvetica-Bold',
-            fontSize=12,
+            fontSize=11,
             leading=14,
-            spaceBefore=14,
-            spaceAfter=8,
+            spaceBefore=16,
+            spaceAfter=6,
             alignment=TA_LEFT,
-            textColor=black
+            textColor=black,
+            textTransform='uppercase'
         )
         
         # Contact info style (centered)
@@ -203,9 +218,9 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             parent=styles['Normal'],
             fontName='Helvetica',
             fontSize=9,
-            leading=11,
+            leading=12,
             alignment=TA_CENTER,
-            spaceAfter=4
+            spaceAfter=6
         )
         
         # Footer style
@@ -225,18 +240,18 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             'TitleName',
             parent=styles['Heading1'],
             fontName='Helvetica-Bold',
-            fontSize=18,
-            leading=20,
+            fontSize=16,
+            leading=18,
             alignment=TA_CENTER,
-            spaceAfter=4
+            spaceAfter=6
         )
         
         style_subtitle = ParagraphStyle(
             'Subtitle',
             parent=styles['Normal'],
             fontName='Helvetica',
-            fontSize=11,
-            leading=13,
+            fontSize=10,
+            leading=12,
             alignment=TA_CENTER,
             spaceAfter=8
         )
@@ -248,9 +263,10 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         lines = resume_text.split('\n')
         
         current_section = None
+        in_domain_expertise = False
         
         # Sections that need justified alignment
-        justified_sections = ['professional summary', 'domain expertise']
+        justified_sections = ['professional summary']
         
         # Sections that need table-like left alignment
         table_sections = [
@@ -265,7 +281,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             line_stripped = line.strip()
             
             if not line_stripped:
-                # Add spacing between sections
                 story.append(Spacer(1, 4))
                 continue
             
@@ -274,16 +289,15 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             # ============================================
             line_lower = line_stripped.lower()
             
-            # Check for section headers (case-insensitive)
             is_section_header = False
-            for section in justified_sections + table_sections:
+            for section in justified_sections + table_sections + ['domain expertise']:
                 if section in line_lower:
-                    # Add section header
                     story.append(Spacer(1, 8))
                     story.append(Paragraph(line_stripped.upper(), style_heading))
                     story.append(Spacer(1, 2))
                     
                     current_section = section
+                    in_domain_expertise = (section == 'domain expertise')
                     is_section_header = True
                     break
             
@@ -295,7 +309,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             # ============================================
             
             # Name (first line, no section yet)
-            if current_section is None and not any(c in line_stripped for c in ['@', '📧', '📞', '📍', '🔗', '', '|', '—', '■']):
+            if current_section is None and not any(c in line_stripped for c in ['@', '📧', '📞', '📍', '🔗', '', '|', '—', '■', '●', '•']):
                 if len(line_stripped.split()) <= 3 and line_stripped[0].isupper():
                     story.append(Paragraph(line_stripped, style_title))
                     continue
@@ -306,9 +320,10 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                 continue
             
             # Contact info line
-            if any(icon in line_stripped for icon in ['📧', '📞', '📍', '', '💻', '@', 'linkedin', 'github', '■']):
-                story.append(Paragraph(line_stripped, style_contact))
-                continue
+            if any(icon in line_stripped for icon in ['📧', '📞', '📍', '', '💻', '@', 'linkedin', 'github', '■', '●', '•']):
+                if '|' in line_stripped or '@' in line_stripped or '+' in line_stripped:
+                    story.append(Paragraph(line_stripped, style_contact))
+                    continue
             
             # Footer line
             if 'ATS-Optimized Resume' in line_stripped or 'Last Updated:' in line_stripped:
@@ -320,21 +335,33 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             # Section-Specific Formatting
             # ============================================
             
-            # Professional Summary & Domain Expertise: Justified alignment
-            if current_section in ['professional summary', 'domain expertise']:
-                # Handle multi-line summary text
-                if line_stripped.startswith('•') or line_stripped.startswith('-'):
+            # Professional Summary: Justified alignment
+            if current_section == 'professional summary':
+                if line_stripped.startswith('•') or line_stripped.startswith('-') or line_stripped.startswith('■'):
                     line_stripped = line_stripped[1:].strip()
                 story.append(Paragraph(line_stripped, style_justified))
                 continue
             
-            # Table-like sections: Left-aligned with proper indentation
+            # Domain Expertise: Comma-separated with proper line breaks
+            if in_domain_expertise:
+                # Format domain expertise with commas for better wrapping
+                domains = line_stripped.replace('  ', ' ').split()
+                # Group into chunks of 4-5 domains per line for better readability
+                formatted_domains = []
+                for i in range(0, len(domains), 5):
+                    chunk = domains[i:i+5]
+                    formatted_domains.append(', '.join(chunk))
+                
+                for domain_line in formatted_domains:
+                    story.append(Paragraph(domain_line, style_domain))
+                continue
+            
+            # Table-like sections: Left-aligned with consistent indentation
             if current_section in table_sections:
                 
-                # Handle different line patterns
-                if line_stripped.startswith('•') or line_stripped.startswith('-') or line_stripped.startswith('🏅') or line_stripped.startswith('■') or line_stripped.startswith('📌'):
-                    # Bullet point - add proper indentation
-                    bullet_char = line_stripped[0]
+                # Handle bullet points (normalize all bullet types)
+                if line_stripped.startswith('•') or line_stripped.startswith('-') or line_stripped.startswith('■') or line_stripped.startswith('●') or line_stripped.startswith('🏅') or line_stripped.startswith('📌'):
+                    bullet_char = '•'  # Normalize to standard bullet
                     content = line_stripped[1:].strip()
                     formatted_line = f"{bullet_char} {content}"
                     story.append(Paragraph(formatted_line, style_left_table))
@@ -343,7 +370,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     # Role | Company — Location | Date format
                     parts = [p.strip() for p in line_stripped.split('|')]
                     if len(parts) >= 2:
-                        # Format as: **Role** | Company — Location | Date
                         role = parts[0].strip()
                         rest = ' | '.join(parts[1:])
                         formatted = f"<b>{role}</b> | {rest}"
@@ -353,7 +379,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                 
                 elif '**' in line_stripped and current_section == 'technical & professional skills':
                     # Skills category: **Tools:** item1, item2, item3
-                    # Keep bold formatting
                     story.append(Paragraph(line_stripped, style_left_table))
                 
                 else:
@@ -377,7 +402,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         return None
 
 # ============================================
-# Prompts
+# Prompts - UPDATED FOR CONSISTENCY
 # ============================================
 
 VALIDATION_SYSTEM_PROMPT = """
@@ -391,6 +416,7 @@ OUTPUT REQUIREMENTS:
 4. Calculate scores honestly based on keyword matching, experience relevance, and skill alignment
 5. Be specific about what's matched and what's missing
 6. Use the exact section headers as shown in the template
+7. Be HONEST - do not claim skills/experience that aren't in the resume
 """
 
 VALIDATION_USER_PROMPT = """
@@ -481,18 +507,25 @@ Generate the Validation Report in this EXACT format:
 RESUME_GEN_SYSTEM_PROMPT = """
 You are an expert Resume Writer specializing in ATS-optimized IT Business Analyst resumes.
 
-TASK: Rewrite the user's resume to align with the provided Job Description.
+CRITICAL RULES:
+1. DO NOT add skills, domains, or experience that are NOT in the original resume
+2. DO NOT claim expertise in domains where the candidate has no experience
+3. If Validation Report says "Missing: Insurance domain", DO NOT add Insurance to Domain Expertise
+4. Be HONEST - only optimize what's already there, don't fabricate experience
+5. Match the Validation Report - if it says missing skills, don't add them to the resume
+
+TASK: Rewrite the user's resume to align with the provided Job Description WITHOUT adding false information.
 
 TEMPLATE STRUCTURE (FOLLOW EXACTLY - Based on Priya Sharma ATS Template):
 
 1. Name (just the name, centered)
 2. Title (IT Business Analyst | Agile BA | Requirements Engineer)
-3. Contact Info (📧 Email | 📞 Phone | 📍 Location |  LinkedIn | 💻 GitHub)
-4. Professional Summary (3-4 lines, achievement-oriented)
-5. Domain Expertise (list format, no bullets, space-separated)
+3. Contact Info (📧 Email |  Phone | 📍 Location |  LinkedIn | 💻 GitHub)
+4. Professional Summary (3-4 lines, achievement-oriented, based on ACTUAL experience)
+5. Domain Expertise (ONLY domains from original resume - comma-separated)
 6. Professional Experience (Role | Company — Location | Date | Bullets with quantified achievements)
 7. Certifications (🏅 Cert Name — Issuer | Year)
-8. Technical & Professional Skills (Tools, Databases, Methodologies, Frameworks, Languages)
+8. Technical & Professional Skills (ONLY tools from original resume)
 9. Key Projects (📌 Project Name | Description | Role | Tools)
 10. Education (Degree — Institution | Year | Grade)
 11. Footer: ATS-Optimized Resume | IT Business Analyst | Last Updated: [Month Year]
@@ -501,17 +534,22 @@ STYLE REQUIREMENTS:
 - Single column layout (NO tables, NO graphics, NO photos)
 - Clean hierarchy with clear section headers
 - Use standard fonts (Helvetica/Arial implied)
-- Optimize keywords based on the Job Description
+- Optimize keywords based on the Job Description (ONLY if candidate has related experience)
 - Do NOT use Markdown headers (#), use plain text with capitalization
-- Use emojis sparingly (🏅 for certs, 📌 for projects, 📧📞 for contact)
+- Use emojis sparingly (🏅 for certs, 📌 for projects, 📧 for contact)
 - Keep it concise and achievement-oriented
 - Quantify achievements where possible (%, $, numbers)
 - Compatible with Workday, Taleo, Lever, Greenhouse ATS systems
 
+DOMAIN EXPERTISE FORMATTING:
+- List domains as: Banking, Finance, Healthcare, E-commerce (comma-separated)
+- DO NOT add domains not in original resume
+- If candidate has 5 years Banking but 0 years Insurance, list only Banking
+
 IMPORTANT:
-- Match keywords from the Job Description
-- Highlight relevant BA skills (Requirements Gathering, Stakeholder Management, Agile/Scrum, etc.)
-- Include domain expertise if mentioned in JD (Banking, Finance, Healthcare, etc.)
+- Match keywords from the Job Description ONLY where candidate has actual experience
+- Highlight relevant BA skills the candidate ACTUALLY has
+- DO NOT fabricate domain expertise or tool experience
 """
 
 RESUME_GEN_USER_PROMPT = """
@@ -520,6 +558,12 @@ Here is the User's Original Resume Data:
 
 Here is the Target Job Description:
 {jd_text}
+
+IMPORTANT: 
+- Only include skills, domains, and experience that are in the ORIGINAL resume
+- Do NOT add Insurance domain if not in original resume
+- Do NOT add tools the candidate hasn't used
+- Optimize wording but stay truthful to actual experience
 
 Generate the new ATS-optimized resume content following the Priya Sharma template structure exactly.
 """
