@@ -8,8 +8,9 @@ from docx import Document
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
 from reportlab.lib.units import inch
+from reportlab.lib.colors import black, gray
 
 # ============================================
 # Page Configuration
@@ -132,7 +133,11 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
         return None
 
 def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
-    """Generates ATS-friendly PDF following Priya Sharma template structure."""
+    """
+    Generates ATS-friendly PDF with custom formatting:
+    - Professional Summary & Domain Expertise: Justified alignment
+    - Professional Experience, Skills, Projects, Education: Table-like left alignment
+    """
     try:
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
         temp_filename = temp_file.name
@@ -149,41 +154,52 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         
         styles = getSampleStyleSheet()
         
-        # Custom Styles - ATS Optimized (Single column, standard fonts)
-        style_name = ParagraphStyle(
-            'CustomNormal',
+        # ============================================
+        # Custom Styles - ATS Optimized
+        # ============================================
+        
+        # Justified alignment for Professional Summary & Domain Expertise
+        style_justified = ParagraphStyle(
+            'JustifiedNormal',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=10,
+            leading=12,
+            alignment=TA_JUSTIFY,
+            spaceAfter=6,
+            leftIndent=0,
+            rightIndent=0
+        )
+        
+        # Left-aligned style for table-like sections (indented for visual structure)
+        style_left_table = ParagraphStyle(
+            'LeftTable',
             parent=styles['Normal'],
             fontName='Helvetica',
             fontSize=10,
             leading=12,
             alignment=TA_LEFT,
-            spaceAfter=6
+            spaceAfter=4,
+            leftIndent=15,  # Indent for table-like appearance
+            bulletIndent=25
         )
         
+        # Section header style with underline effect
         style_heading = ParagraphStyle(
-            'CustomHeading',
+            'SectionHeading',
             parent=styles['Heading2'],
             fontName='Helvetica-Bold',
-            fontSize=14,
-            leading=16,
-            spaceBefore=12,
-            spaceAfter=6,
-            alignment=TA_CENTER
+            fontSize=12,
+            leading=14,
+            spaceBefore=14,
+            spaceAfter=8,
+            alignment=TA_LEFT,
+            textColor=black
         )
         
-        style_subheading = ParagraphStyle(
-            'CustomSubHeading',
-            parent=styles['Heading3'],
-            fontName='Helvetica-Bold',
-            fontSize=11,
-            leading=13,
-            spaceBefore=8,
-            spaceAfter=4,
-            alignment=TA_LEFT
-        )
-        
+        # Contact info style (centered)
         style_contact = ParagraphStyle(
-            'CustomContact',
+            'ContactInfo',
             parent=styles['Normal'],
             fontName='Helvetica',
             fontSize=9,
@@ -192,44 +208,172 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             spaceAfter=4
         )
         
+        # Footer style
         style_footer = ParagraphStyle(
-            'CustomFooter',
+            'Footer',
             parent=styles['Normal'],
             fontName='Helvetica',
             fontSize=8,
             leading=10,
             alignment=TA_CENTER,
-            textColor='#666666'
+            textColor=gray,
+            spaceBefore=20
+        )
+        
+        # Title/Name style
+        style_title = ParagraphStyle(
+            'TitleName',
+            parent=styles['Heading1'],
+            fontName='Helvetica-Bold',
+            fontSize=18,
+            leading=20,
+            alignment=TA_CENTER,
+            spaceAfter=4
+        )
+        
+        style_subtitle = ParagraphStyle(
+            'Subtitle',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=11,
+            leading=13,
+            alignment=TA_CENTER,
+            spaceAfter=8
         )
 
+        # ============================================
+        # Parse and Format Resume Content
+        # ============================================
         story = []
         lines = resume_text.split('\n')
         
+        current_section = None
+        
+        # Sections that need justified alignment
+        justified_sections = ['professional summary', 'domain expertise']
+        
+        # Sections that need table-like left alignment
+        table_sections = [
+            'professional experience', 
+            'technical & professional skills', 
+            'key projects', 
+            'education',
+            'certifications'
+        ]
+        
         for line in lines:
-            line = line.strip()
-            if not line:
+            line_stripped = line.strip()
+            
+            if not line_stripped:
+                # Add spacing between sections
                 story.append(Spacer(1, 4))
                 continue
             
-            # Detect formatting based on content patterns
-            if line.startswith("###"):
-                story.append(Paragraph(line.replace("###", "").strip(), style_heading))
-            elif line.startswith("**") and "**" in line[2:]:
-                clean_line = line.replace("**", "")
-                story.append(Paragraph(clean_line, style_subheading))
-            elif any(line.startswith(prefix) for prefix in ["📧", "", "📍", "🔗", "💻"]):
-                story.append(Paragraph(line, style_contact))
-            elif line.startswith("•") or line.startswith("-") or line.startswith("🏅") or line.startswith("📌"):
-                story.append(Paragraph(line, style_name))
-            elif "ATS-Optimized Resume" in line or "Last Updated" in line:
-                story.append(Paragraph(line, style_footer))
-            else:
-                story.append(Paragraph(line, style_name))
+            # ============================================
+            # Detect Section Headers
+            # ============================================
+            line_lower = line_stripped.lower()
+            
+            # Check for section headers (case-insensitive)
+            is_section_header = False
+            for section in justified_sections + table_sections:
+                if section in line_lower:
+                    # Add section header
+                    story.append(Spacer(1, 8))
+                    story.append(Paragraph(line_stripped.upper(), style_heading))
+                    story.append(Spacer(1, 2))
+                    
+                    current_section = section
+                    is_section_header = True
+                    break
+            
+            if is_section_header:
+                continue
+            
+            # ============================================
+            # Format Content Based on Section
+            # ============================================
+            
+            # Name (first line, no section yet)
+            if current_section is None and not any(c in line_stripped for c in ['@', '📧', '📞', '📍', '🔗', '', '|', '—', '■']):
+                if len(line_stripped.split()) <= 3 and line_stripped[0].isupper():
+                    story.append(Paragraph(line_stripped, style_title))
+                    continue
+            
+            # Title/Role line
+            if current_section is None and any(term in line_stripped for term in ['Business Analyst', 'Agile BA', 'Requirements Engineer']):
+                story.append(Paragraph(line_stripped, style_subtitle))
+                continue
+            
+            # Contact info line
+            if any(icon in line_stripped for icon in ['📧', '📞', '📍', '', '💻', '@', 'linkedin', 'github', '■']):
+                story.append(Paragraph(line_stripped, style_contact))
+                continue
+            
+            # Footer line
+            if 'ATS-Optimized Resume' in line_stripped or 'Last Updated:' in line_stripped:
+                story.append(Spacer(1, 10))
+                story.append(Paragraph(line_stripped, style_footer))
+                continue
+            
+            # ============================================
+            # Section-Specific Formatting
+            # ============================================
+            
+            # Professional Summary & Domain Expertise: Justified alignment
+            if current_section in ['professional summary', 'domain expertise']:
+                # Handle multi-line summary text
+                if line_stripped.startswith('•') or line_stripped.startswith('-'):
+                    line_stripped = line_stripped[1:].strip()
+                story.append(Paragraph(line_stripped, style_justified))
+                continue
+            
+            # Table-like sections: Left-aligned with proper indentation
+            if current_section in table_sections:
+                
+                # Handle different line patterns
+                if line_stripped.startswith('•') or line_stripped.startswith('-') or line_stripped.startswith('🏅') or line_stripped.startswith('■') or line_stripped.startswith('📌'):
+                    # Bullet point - add proper indentation
+                    bullet_char = line_stripped[0]
+                    content = line_stripped[1:].strip()
+                    formatted_line = f"{bullet_char} {content}"
+                    story.append(Paragraph(formatted_line, style_left_table))
+                
+                elif '|' in line_stripped and current_section in ['professional experience', 'education']:
+                    # Role | Company — Location | Date format
+                    parts = [p.strip() for p in line_stripped.split('|')]
+                    if len(parts) >= 2:
+                        # Format as: **Role** | Company — Location | Date
+                        role = parts[0].strip()
+                        rest = ' | '.join(parts[1:])
+                        formatted = f"<b>{role}</b> | {rest}"
+                        story.append(Paragraph(formatted, style_left_table))
+                    else:
+                        story.append(Paragraph(line_stripped, style_left_table))
+                
+                elif '**' in line_stripped and current_section == 'technical & professional skills':
+                    # Skills category: **Tools:** item1, item2, item3
+                    # Keep bold formatting
+                    story.append(Paragraph(line_stripped, style_left_table))
+                
+                else:
+                    # Regular content line
+                    story.append(Paragraph(line_stripped, style_left_table))
+                continue
+            
+            # Default fallback
+            story.append(Paragraph(line_stripped, style_justified))
         
+        # ============================================
+        # Build PDF
+        # ============================================
         doc.build(story)
         return temp_filename
+        
     except Exception as e:
         st.error(f"❌ Error generating PDF: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
         return None
 
 # ============================================
