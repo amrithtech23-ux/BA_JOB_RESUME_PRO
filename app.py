@@ -277,12 +277,27 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
         return None
 
 def clean_resume_text(text):
-    """Clean and normalize resume text before PDF generation."""
+    """Clean and normalize resume text before PDF generation - ENHANCED."""
     if not text:
         return ""
     
     # Remove markdown formatting
     text = text.replace('**', '').replace('##', '').replace('#', '').replace('###', '')
+    
+    # Remove meta-instructional text and section headers that shouldn't appear
+    meta_patterns = [
+        r'CRITICAL SUCCESS FACTORS:.*',
+        r'FUNCTIONAL SKILLS:.*',
+        r'INCLUDE ALL JD-REQUIRED.*',
+        r'USE JD LANGUAGE.*',
+        r'This resume is optimized.*',
+        r'Achieve 85%\+ keyword match.*',
+        r'Footer:.*',
+        r'ATS-Optimized Resume.*Last Updated.*',
+    ]
+    
+    for pattern in meta_patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
     
     # Fix double commas and spacing
     text = re.sub(r',,+', ',', text)
@@ -293,16 +308,26 @@ def clean_resume_text(text):
     # Normalize bullets
     text = text.replace('■', '•').replace('–', '-').replace('—', '|')
     
-    # Remove separators
+    # Remove separator lines and dashes
     text = re.sub(r'\n---+\n', '\n', text)
     text = re.sub(r'^---+\s*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^•\s*--\s*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*--\s*$', '', text, flags=re.MULTILINE)
     
-    # Remove lines with only special characters
+    # Remove lines with only special characters or very short
     lines = text.split('\n')
     cleaned_lines = []
     for line in lines:
         stripped = line.strip()
-        if stripped and len(stripped) > 2 and not re.match(r'^[•\-–—\|]+$', stripped):
+        # Skip lines that are just bullets, dashes, pipes, or very short (< 3 chars)
+        if stripped and len(stripped) > 3 and not re.match(r'^[•\-–—\|\*]+$', stripped):
+            # Also skip lines that are all caps and look like headers but aren't section headers
+            if stripped.isupper() and len(stripped) < 50:
+                # Check if it's not a real section header
+                section_headers = ['PROFESSIONAL SUMMARY', 'DOMAIN EXPERTISE', 'PROFESSIONAL EXPERIENCE', 
+                                  'CERTIFICATIONS', 'TECHNICAL', 'KEY PROJECTS', 'EDUCATION', 'SKILLS']
+                if not any(header in stripped for header in section_headers):
+                    continue
             cleaned_lines.append(line)
     
     text = '\n'.join(cleaned_lines)
@@ -428,6 +453,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         is_first_line = True
         skip_section = False
         
+        # Enhanced skip keywords - more comprehensive
         skip_keywords = [
             'critical success factors', 'achieve 85%+ keyword match',
             'include all jd-required domains', 'use jd language in professional summary',
@@ -435,7 +461,8 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             'include, all, jd-required, skills', 'footer:', 'footer',
             'ats-optimized resume | it business analyst | last updated',
             'last updated:', 'optimization notes', 'ai-generated',
-            'meta-instructional', 'functional skills:'
+            'meta-instructional', 'functional skills:', 'technical skills:',
+            'professional skills:', 'additional information', 'references available'
         ]
         
         for line in lines:
@@ -448,10 +475,12 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             line_clean = line_stripped
             line_lower = line_clean.lower()
             
+            # Skip meta-instructional sections
             if any(keyword in line_lower for keyword in skip_keywords):
                 skip_section = True
                 continue
             
+            # Reset skip flag if we hit a real section header
             if any(header in line_lower for header in ['professional summary', 'domain expertise', 
                                                          'professional experience', 'certifications',
                                                          'technical', 'key projects', 'education']):
@@ -460,6 +489,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             if skip_section:
                 continue
             
+            # Detect section headers
             section_keywords = {
                 'professional summary': 'professional summary',
                 'domain expertise': 'domain expertise',
@@ -483,27 +513,32 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             if is_header:
                 continue
             
+            # Name (first non-empty line)
             if is_first_line and len(line_clean.split()) <= 3:
                 if not any(c in line_clean for c in ['@', '📧', '📞', '📍', '■', '|', '—', '•', ':', '+']):
                     story.append(Paragraph(line_clean, style_title))
                     is_first_line = False
                     continue
             
+            # Title/Role
             if is_first_line and any(term in line_clean for term in ['Business Analyst', 'Agile BA', 'Requirements Engineer']):
                 story.append(Paragraph(line_clean, style_subtitle))
                 is_first_line = False
                 continue
             
+            # Contact info
             if any(icon in line_clean for icon in ['📧', '📞', '📍', '■', '@', '+91', 'linkedin', 'github', 'email']):
                 if '|' in line_clean or '@' in line_clean or '+' in line_clean:
                     story.append(Paragraph(line_clean, style_contact))
                     continue
             
+            # Professional Summary - Justified
             if current_section == 'professional summary':
                 if not line_clean.startswith('•') and not line_clean.startswith('-'):
                     story.append(Paragraph(line_clean, style_summary))
                 continue
             
+            # Domain Expertise - Comma-separated with clean formatting
             if current_section == 'domain expertise':
                 domains = [d.strip() for d in line_clean.replace('  ', ' ').split(',') if d.strip() and len(d.strip()) > 2]
                 domain_line = ', '.join(domains)
@@ -511,6 +546,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(domain_line, style_domain))
                 continue
             
+            # Professional Experience - Left aligned with bullets
             if current_section == 'professional experience':
                 if '|' in line_clean and '—' in line_clean:
                     parts = line_clean.split('|')
@@ -530,6 +566,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(line_clean, style_content))
                 continue
             
+            # Education - Left aligned
             if current_section == 'education':
                 if '—' in line_clean or '|' in line_clean:
                     story.append(Paragraph(line_clean, style_content))
@@ -541,6 +578,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(line_clean, style_content))
                 continue
             
+            # Certifications - Left aligned with bullets
             if current_section == 'certifications':
                 if line_clean.startswith('•') or line_clean.startswith('-') or line_clean.startswith('■') or line_clean.startswith('🏅'):
                     content = line_clean[1:].strip()
@@ -550,6 +588,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(line_clean, style_content))
                 continue
             
+            # Technical Skills - Left aligned
             if current_section == 'technical & professional skills':
                 if line_clean.startswith('•') or line_clean.startswith('-') or line_clean.startswith('**'):
                     content = line_clean.replace('**', '').strip()
@@ -561,6 +600,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(line_clean, style_content))
                 continue
             
+            # Key Projects - Left aligned with bullets
             if current_section == 'key projects':
                 if line_clean.startswith('•') or line_clean.startswith('-') or line_clean.startswith('■') or line_clean.startswith('📌'):
                     content = line_clean[1:].strip()
@@ -570,6 +610,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(line_clean, style_content))
                 continue
             
+            # Default fallback
             story.append(Paragraph(line_clean, style_content))
         
         doc.build(story)
@@ -643,7 +684,7 @@ Generate validation report in this EXACT format:
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
-RESUME_GEN_SYSTEM_PROMPT = """You are an expert Resume Writer. Create an ATS-optimized resume that achieves 85%+ match with the job description. Follow the Priya Sharma template format exactly. NO footers, NO meta-text, NO all-caps sections."""
+RESUME_GEN_SYSTEM_PROMPT = """You are an expert Resume Writer. Create an ATS-optimized resume that achieves 85%+ match with the job description. Follow the Priya Sharma template format exactly. NO footers, NO meta-text, NO all-caps sections, NO instructional text."""
 
 RESUME_GEN_USER_PROMPT = """
 Original Resume:
@@ -664,13 +705,14 @@ Create ATS-optimized resume following this structure:
 9. Key Projects
 10. Education
 
-Rules:
+CRITICAL RULES:
 - Combine candidate's domains with job-required domains
 - Include 90%+ of JD keywords
 - Use standard formatting, NO markdown
 - NO double commas
 - NO footers
-- Output ONLY the resume content
+- NO meta-text like "Critical Success Factors" or "Functional Skills:"
+- Output ONLY the resume content - nothing else
 """
 
 # ============================================
