@@ -101,7 +101,7 @@ def get_api_key():
                         help="Get your key from https://openrouter.ai/keys")
 
 def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.5-72b-instruct", max_tokens=4000):
-    """Calls OpenRouter API using Qwen model."""
+    """Calls OpenRouter API using Qwen model with robust error handling."""
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -122,28 +122,43 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
     
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=120)
-        response.raise_for_status()
+        
+        # Log the full response for debugging
+        if response.status_code != 200:
+            st.error(f"❌ API Error ({response.status_code}): {response.text[:500]}")
+            return None
+        
         result = response.json()
+        
+        # Check if 'choices' key exists
+        if 'choices' not in result:
+            st.error(f"❌ Unexpected API response: {result}")
+            return None
+        
+        if not result['choices']:
+            st.error("❌ API returned empty choices")
+            return None
+            
         return result['choices'][0]['message']['content']
+        
     except requests.exceptions.Timeout:
         st.error("⏱️ Request timed out. Please try again.")
         return None
-    except requests.exceptions.HTTPError as e:
-        st.error(f"❌ HTTP Error: {e.response.status_code}")
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Connection error: {str(e)}")
         return None
     except Exception as e:
-        st.error(f"❌ API Error: {str(e)}")
+        st.error(f"❌ Unexpected error: {str(e)}")
         return None
 
 def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
     """
     Generates ATS-friendly PDF matching Priya Sharma template format.
-    - Filters out meta-instructional text
+    - Filters out meta-instructional text, footers, and separators
     - Professional Summary: Justified alignment
     - Domain Expertise: Left-aligned, comma-separated
     - Experience/Skills/Projects/Education: Left-aligned with proper indentation
-    - NO Footer line
-    - NO meta-instructional sections
+    - Clean output: Only resume content, no AI comments or optimization notes
     """
     try:
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
@@ -272,7 +287,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         is_first_line = True
         skip_section = False
         
-        # Meta-instructional keywords to filter out
+        # Meta-instructional keywords to filter out (NO FOOTER, NO AI NOTES)
         skip_keywords = [
             'critical success factors',
             'achieve 85%+ keyword match',
@@ -283,7 +298,12 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             'include, all, jd-required, skills',
             'footer:',
             'ats-optimized resume | it business analyst | last updated',
-            '---'  # Skip separator lines
+            '---',  # Skip separator lines
+            'footer',  # Skip footer label
+            'last updated:',  # Skip date footer
+            'optimization notes',
+            'ai-generated',
+            'meta-instructional'
         ]
         
         for line in lines:
@@ -294,12 +314,12 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                 continue
             
             # Remove markdown formatting
-            line_clean = line_stripped.replace('**', '').replace('##', '').replace('#', '').replace('■', '•')
+            line_clean = line_stripped.replace('**', '').replace('##', '').replace('#', '').replace('■', '')
             
             line_lower = line_clean.lower()
             
             # ============================================
-            # SKIP META-INSTRUCTIONAL SECTIONS
+            # SKIP META-INSTRUCTIONAL SECTIONS & FOOTERS
             # ============================================
             if any(keyword in line_lower for keyword in skip_keywords):
                 skip_section = True
@@ -619,6 +639,7 @@ FORMATTING RULES:
 - DO NOT include footer line at bottom
 - DO NOT include meta-instructional text (Critical Success Factors, etc.)
 - DO NOT include optimization notes or AI-generated comments
+- OUTPUT ONLY THE RESUME CONTENT - no explanations, no notes
 
 DOMAIN EXPERTISE EXAMPLE:
 Banking, Insurance, Financial Services, Healthcare, E-commerce, Retail
@@ -630,15 +651,14 @@ SKILLS SECTION EXAMPLE:
 • ETL Tools: Talend, Informatica, SSIS (Familiar)
 • Languages: Python (Intermediate), PySpark (Basic)
 
-CRITICAL SUCCESS FACTORS:
+CRITICAL OUTPUT RULES:
 - Achieve 85%+ keyword match with JD
 - Include ALL JD-required domains in Domain Expertise
 - Include ALL JD-required skills in Skills section
 - Use JD language in Professional Summary and Experience bullets
 - Maintain credibility by marking unfamiliar skills appropriately
 - Quantify achievements with candidate's actual metrics
-- DO NOT include footer line at bottom of resume
-- DO NOT include meta-instructional text or optimization notes
+- OUTPUT ONLY RESUME CONTENT - no footers, no notes, no AI comments
 """
 
 RESUME_GEN_USER_PROMPT = """
@@ -698,17 +718,14 @@ INSTRUCTIONS FOR 85%+ MATCH:
    - Skills Section: 90%+ of JD skills
    - Experience Bullets: 70%+ of JD keywords
 
-5. **FINAL CHECK:**
-   - Does resume include all JD domains? (Banking + Insurance if both required)
-   - Does resume include all JD skills? (Even if marked as "Familiar")
-   - Does Professional Summary mirror JD language?
-   - Are achievements quantified with metrics?
-   - Is formatting ATS-compatible (single column, no tables)?
+5. **FINAL OUTPUT RULES:**
+   - OUTPUT ONLY THE RESUME CONTENT
    - NO footer line at bottom
    - NO meta-instructional text (Critical Success Factors, optimization notes, etc.)
+   - NO AI comments, explanations, or notes
+   - Just the clean resume following Priya Sharma template
 
 Generate the ATS-optimized resume following this exact structure to achieve 85%+ match.
-DO NOT include any meta-instructional text, optimization notes, or AI comments in the output.
 """
 
 # ============================================
