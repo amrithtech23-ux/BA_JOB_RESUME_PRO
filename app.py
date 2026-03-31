@@ -13,13 +13,13 @@ from reportlab.lib.units import inch
 from reportlab.lib.colors import black, gray
 
 # ============================================
-# Page Configuration
+# Page Configuration - Sidebar Collapsed
 # ============================================
 st.set_page_config(
     page_title="Business Analyst Job Apply Pro",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"  # Changed to collapsed
 )
 
 # ============================================
@@ -55,6 +55,9 @@ st.markdown("""
     }
     .stButton>button {
         width: 100%;
+    }
+    [data-testid="stSidebar"] {
+        display: none;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -135,7 +138,9 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
 def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
     """
     Generates ATS-friendly PDF matching Priya Sharma template format.
-    Proper alignment, formatting, and structure.
+    - Professional Summary & Domain Expertise: Justified/Left alignment
+    - Experience/Skills/Projects/Education: Left-aligned with proper indentation
+    - NO Footer line (removed as requested)
     """
     try:
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
@@ -253,18 +258,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             leftIndent=20,
             firstLineIndent=-15
         )
-        
-        # Footer - Centered, gray
-        style_footer = ParagraphStyle(
-            'FooterStyle',
-            parent=styles['Normal'],
-            fontName='Helvetica',
-            fontSize=8,
-            leading=10,
-            alignment=TA_CENTER,
-            textColor=gray,
-            spaceBefore=15
-        )
 
         # ============================================
         # Parse and Format Resume Content
@@ -297,8 +290,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                 'certifications': 'certifications',
                 'technical': 'technical & professional skills',
                 'key projects': 'key projects',
-                'education': 'education',
-                'ats-optimized': 'footer'
+                'education': 'education'
             }
             
             is_header = False
@@ -315,12 +307,18 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                 continue
             
             # ============================================
+            # SKIP FOOTER LINES (Removed as requested)
+            # ============================================
+            if 'ats-optimized' in line_lower or 'last updated' in line_lower or 'footer' in line_lower:
+                continue  # Don't add footer to PDF
+            
+            # ============================================
             # Format Content by Section
             # ============================================
             
             # Name (first non-empty line)
             if is_first_line and len(line_clean.split()) <= 3:
-                if not any(c in line_clean for c in ['@', '📧', '📞', '📍', '■', '|', '—', '•', ':']):
+                if not any(c in line_clean for c in ['@', '📧', '📞', '', '■', '|', '—', '•', ':']):
                     story.append(Paragraph(line_clean, style_title))
                     is_first_line = False
                     continue
@@ -336,12 +334,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                 if '|' in line_clean or '@' in line_clean or '+' in line_clean:
                     story.append(Paragraph(line_clean, style_contact))
                     continue
-            
-            # Footer
-            if 'ats-optimized' in line_lower or 'last updated' in line_lower:
-                story.append(Spacer(1, 8))
-                story.append(Paragraph(line_clean, style_footer))
-                continue
             
             # Professional Summary - Justified
             if current_section == 'professional summary':
@@ -453,7 +445,7 @@ Your task is to compare a Candidate's Resume against a Job Description (JD).
 OUTPUT REQUIREMENTS:
 1. Output the result EXACTLY in the ASCII ART table format provided
 2. Do NOT add any markdown code blocks around the ASCII art
-3. Ensure the boxes align correctly using box-drawing characters (╔═╗║╚═╝╣)
+3. Ensure the boxes align correctly using box-drawing characters (╔═╗║╚═╝╠╣)
 4. Calculate scores honestly based on keyword matching, experience relevance, and skill alignment
 5. Be specific about what's matched and what's missing
 6. Use the exact section headers as shown in the template
@@ -595,14 +587,14 @@ TEMPLATE STRUCTURE (FOLLOW EXACTLY - Priya Sharma Format):
 8. Technical & Professional Skills (All candidate skills + JD skills)
 9. Key Projects (📌 Project Name | Description | Role | Tools)
 10. Education (Degree — Institution | Year | Grade)
-11. Footer: ATS-Optimized Resume | IT Business Analyst | Last Updated: [Month Year]
 
 FORMATTING RULES:
 - Single column layout (NO tables, NO graphics, NO photos)
 - Standard fonts (Helvetica/Arial)
-- Use emojis: 📧📍 for contact, 🏅 for certs, 📌 for projects
+- Use emojis: 📧 for contact, 🏅 for certs, 📌 for projects
 - Quantify achievements (%, $, numbers)
 - ATS-compatible (Workday, Taleo, Lever, Greenhouse)
+- NO Footer line at the bottom
 
 DOMAIN EXPERTISE EXAMPLE:
 Banking, Insurance, Financial Services, Healthcare, E-commerce, Retail, 
@@ -622,6 +614,7 @@ CRITICAL SUCCESS FACTORS:
 - Use JD language in Professional Summary and Experience bullets
 - Maintain credibility by marking unfamiliar skills appropriately
 - Quantify achievements with candidate's actual metrics
+- DO NOT include footer line at bottom of resume
 """
 
 RESUME_GEN_USER_PROMPT = """
@@ -687,6 +680,7 @@ INSTRUCTIONS FOR 85%+ MATCH:
    - Does Professional Summary mirror JD language?
    - Are achievements quantified with metrics?
    - Is formatting ATS-compatible (single column, no tables)?
+   - NO footer line at bottom
 
 Generate the ATS-optimized resume following this exact structure to achieve 85%+ match.
 """
@@ -701,7 +695,7 @@ def main():
     st.markdown("### ATS Optimized Resume Validator & Generator")
     st.markdown("---")
     
-    # Sidebar Configuration
+    # Sidebar Configuration (Collapsed by default)
     with st.sidebar:
         st.header("⚙️ Configuration")
         
