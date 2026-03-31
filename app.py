@@ -19,11 +19,11 @@ st.set_page_config(
     page_title="Business Analyst Job Apply Pro",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed"  # Changed to collapsed
+    initial_sidebar_state="collapsed"
 )
 
 # ============================================
-# Custom CSS
+# Custom CSS - Hide Sidebar
 # ============================================
 st.markdown("""
     <style>
@@ -138,9 +138,12 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
 def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
     """
     Generates ATS-friendly PDF matching Priya Sharma template format.
-    - Professional Summary & Domain Expertise: Justified/Left alignment
+    - Filters out meta-instructional text
+    - Professional Summary: Justified alignment
+    - Domain Expertise: Left-aligned, comma-separated
     - Experience/Skills/Projects/Education: Left-aligned with proper indentation
-    - NO Footer line (removed as requested)
+    - NO Footer line
+    - NO meta-instructional sections
     """
     try:
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
@@ -234,7 +237,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             rightIndent=0
         )
         
-        # Experience/Education content - Left aligned with proper indent
+        # Experience/Education content - Left aligned
         style_content = ParagraphStyle(
             'ContentStyle',
             parent=styles['Normal'],
@@ -267,6 +270,21 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         
         current_section = None
         is_first_line = True
+        skip_section = False
+        
+        # Meta-instructional keywords to filter out
+        skip_keywords = [
+            'critical success factors',
+            'achieve 85%+ keyword match',
+            'include all jd-required domains',
+            'use jd language in professional summary',
+            'this resume is optimized for ats',
+            'designed to achieve an 85%+',
+            'include, all, jd-required, skills',
+            'footer:',
+            'ats-optimized resume | it business analyst | last updated',
+            '---'  # Skip separator lines
+        ]
         
         for line in lines:
             line_stripped = line.strip()
@@ -278,11 +296,27 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             # Remove markdown formatting
             line_clean = line_stripped.replace('**', '').replace('##', '').replace('#', '').replace('■', '•')
             
+            line_lower = line_clean.lower()
+            
+            # ============================================
+            # SKIP META-INSTRUCTIONAL SECTIONS
+            # ============================================
+            if any(keyword in line_lower for keyword in skip_keywords):
+                skip_section = True
+                continue
+            
+            # Reset skip flag if we hit a real section header
+            if any(header in line_lower for header in ['professional summary', 'domain expertise', 
+                                                         'professional experience', 'certifications',
+                                                         'technical', 'key projects', 'education']):
+                skip_section = False
+            
+            if skip_section:
+                continue
+            
             # ============================================
             # Detect Section Headers
             # ============================================
-            line_lower = line_clean.lower()
-            
             section_keywords = {
                 'professional summary': 'professional summary',
                 'domain expertise': 'domain expertise',
@@ -307,12 +341,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                 continue
             
             # ============================================
-            # SKIP FOOTER LINES (Removed as requested)
-            # ============================================
-            if 'ats-optimized' in line_lower or 'last updated' in line_lower or 'footer' in line_lower:
-                continue  # Don't add footer to PDF
-            
-            # ============================================
             # Format Content by Section
             # ============================================
             
@@ -323,14 +351,14 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     is_first_line = False
                     continue
             
-            # Title/Role (second line with BA keywords)
+            # Title/Role
             if is_first_line and any(term in line_clean for term in ['Business Analyst', 'Agile BA', 'Requirements Engineer']):
                 story.append(Paragraph(line_clean, style_subtitle))
                 is_first_line = False
                 continue
             
             # Contact info
-            if any(icon in line_clean for icon in ['📧', '📞', '📍', '■', '@', '+91', 'linkedin', 'github', 'email']):
+            if any(icon in line_clean for icon in ['📧', '', '📍', '■', '@', '+91', 'linkedin', 'github', 'email']):
                 if '|' in line_clean or '@' in line_clean or '+' in line_clean:
                     story.append(Paragraph(line_clean, style_contact))
                     continue
@@ -343,9 +371,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             
             # Domain Expertise - Comma-separated with proper wrapping
             if current_section == 'domain expertise':
-                # Split by comma or space and reformat
                 domains = [d.strip() for d in line_clean.replace('  ', ' ').replace('&', '& ').split() if len(d.strip()) > 2]
-                # Group into lines of 5-6 domains for better readability
                 formatted_lines = []
                 for i in range(0, len(domains), 6):
                     chunk = domains[i:i+6]
@@ -358,7 +384,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             
             # Professional Experience - Left aligned with bullets
             if current_section == 'professional experience':
-                # Handle role/company line (contains | and —)
                 if '|' in line_clean and '—' in line_clean:
                     parts = line_clean.split('|')
                     if len(parts) >= 2:
@@ -368,13 +393,10 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                         story.append(Paragraph(formatted, style_content))
                     else:
                         story.append(Paragraph(line_clean, style_content))
-                
-                # Handle bullet points
                 elif line_clean.startswith('•') or line_clean.startswith('-') or line_clean.startswith('■'):
                     content = line_clean[1:].strip()
                     bullet_text = f"• {content}"
                     story.append(Paragraph(bullet_text, style_bullet))
-                
                 else:
                     story.append(Paragraph(line_clean, style_content))
                 continue
@@ -594,11 +616,12 @@ FORMATTING RULES:
 - Use emojis: 📧 for contact, 🏅 for certs, 📌 for projects
 - Quantify achievements (%, $, numbers)
 - ATS-compatible (Workday, Taleo, Lever, Greenhouse)
-- NO Footer line at the bottom
+- DO NOT include footer line at bottom
+- DO NOT include meta-instructional text (Critical Success Factors, etc.)
+- DO NOT include optimization notes or AI-generated comments
 
 DOMAIN EXPERTISE EXAMPLE:
-Banking, Insurance, Financial Services, Healthcare, E-commerce, Retail, 
-Supply Chain, Telecommunications, Government, BFSI
+Banking, Insurance, Financial Services, Healthcare, E-commerce, Retail
 
 SKILLS SECTION EXAMPLE:
 • Tools: JIRA, Confluence, Tableau, Power BI, Qlik Sense, Visio, Lucidchart
@@ -615,6 +638,7 @@ CRITICAL SUCCESS FACTORS:
 - Maintain credibility by marking unfamiliar skills appropriately
 - Quantify achievements with candidate's actual metrics
 - DO NOT include footer line at bottom of resume
+- DO NOT include meta-instructional text or optimization notes
 """
 
 RESUME_GEN_USER_PROMPT = """
@@ -681,8 +705,10 @@ INSTRUCTIONS FOR 85%+ MATCH:
    - Are achievements quantified with metrics?
    - Is formatting ATS-compatible (single column, no tables)?
    - NO footer line at bottom
+   - NO meta-instructional text (Critical Success Factors, optimization notes, etc.)
 
 Generate the ATS-optimized resume following this exact structure to achieve 85%+ match.
+DO NOT include any meta-instructional text, optimization notes, or AI comments in the output.
 """
 
 # ============================================
