@@ -123,14 +123,12 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=120)
         
-        # Log the full response for debugging
         if response.status_code != 200:
             st.error(f"❌ API Error ({response.status_code}): {response.text[:500]}")
             return None
         
         result = response.json()
         
-        # Check if 'choices' key exists
         if 'choices' not in result:
             st.error(f"❌ Unexpected API response: {result}")
             return None
@@ -151,14 +149,39 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
         st.error(f"❌ Unexpected error: {str(e)}")
         return None
 
+def clean_resume_text(text):
+    """Clean and normalize resume text before PDF generation."""
+    if not text:
+        return ""
+    
+    # Remove markdown formatting
+    text = text.replace('**', '').replace('##', '').replace('#', '').replace('###', '')
+    
+    # Remove double commas and fix spacing
+    import re
+    text = re.sub(r',,+', ',', text)  # Replace multiple commas with single
+    text = re.sub(r'\s+,', ',', text)  # Remove space before comma
+    text = re.sub(r',\s+', ', ', text)  # Ensure single space after comma
+    
+    # Normalize bullet points
+    text = text.replace('■', '•').replace('–', '-').replace('—', '|')
+    
+    # Remove multiple dashes used as separators
+    text = re.sub(r'\n---+\n', '\n', text)
+    text = re.sub(r'^---+\s*$', '', text, flags=re.MULTILINE)
+    
+    # Remove extra blank lines (more than 2 consecutive)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    
+    return text.strip()
+
 def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
     """
-    Generates ATS-friendly PDF matching Priya Sharma template format.
-    - Filters out meta-instructional text, footers, and separators
+    Generates ATS-friendly PDF with proper formatting.
     - Professional Summary: Justified alignment
-    - Domain Expertise: Left-aligned, comma-separated
+    - Domain Expertise: Left-aligned, comma-separated (clean formatting)
     - Experience/Skills/Projects/Education: Left-aligned with proper indentation
-    - Clean output: Only resume content, no AI comments or optimization notes
+    - NO Footer, NO meta-text, NO separators
     """
     try:
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
@@ -177,7 +200,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         styles = getSampleStyleSheet()
         
         # ============================================
-        # Custom Styles - Matching Priya Sharma Template
+        # Custom Styles - Clean Professional Format
         # ============================================
         
         # Name/Title
@@ -201,7 +224,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             spaceAfter=8
         )
         
-        # Contact info - Centered with icons
+        # Contact info - Centered
         style_contact = ParagraphStyle(
             'ContactStyle',
             parent=styles['Normal'],
@@ -252,7 +275,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             rightIndent=0
         )
         
-        # Experience/Education content - Left aligned
+        # Content - Left aligned
         style_content = ParagraphStyle(
             'ContentStyle',
             parent=styles['Normal'],
@@ -281,13 +304,16 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         # Parse and Format Resume Content
         # ============================================
         story = []
+        
+        # Clean the text first
+        resume_text = clean_resume_text(resume_text)
         lines = resume_text.split('\n')
         
         current_section = None
         is_first_line = True
         skip_section = False
         
-        # Meta-instructional keywords to filter out (NO FOOTER, NO AI NOTES)
+        # Keywords to skip (meta-text, footers, separators)
         skip_keywords = [
             'critical success factors',
             'achieve 85%+ keyword match',
@@ -297,10 +323,9 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             'designed to achieve an 85%+',
             'include, all, jd-required, skills',
             'footer:',
+            'footer',
             'ats-optimized resume | it business analyst | last updated',
-            '---',  # Skip separator lines
-            'footer',  # Skip footer label
-            'last updated:',  # Skip date footer
+            'last updated:',
             'optimization notes',
             'ai-generated',
             'meta-instructional'
@@ -313,13 +338,11 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                 story.append(Spacer(1, 4))
                 continue
             
-            # Remove markdown formatting
-            line_clean = line_stripped.replace('**', '').replace('##', '').replace('#', '').replace('■', '')
-            
+            line_clean = line_stripped
             line_lower = line_clean.lower()
             
             # ============================================
-            # SKIP META-INSTRUCTIONAL SECTIONS & FOOTERS
+            # SKIP META-INSTRUCTIONAL SECTIONS
             # ============================================
             if any(keyword in line_lower for keyword in skip_keywords):
                 skip_section = True
@@ -366,7 +389,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             
             # Name (first non-empty line)
             if is_first_line and len(line_clean.split()) <= 3:
-                if not any(c in line_clean for c in ['@', '📧', '📞', '', '■', '|', '—', '•', ':']):
+                if not any(c in line_clean for c in ['@', '📧', '📞', '📍', '■', '|', '—', '•', ':', '+']):
                     story.append(Paragraph(line_clean, style_title))
                     is_first_line = False
                     continue
@@ -378,7 +401,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                 continue
             
             # Contact info
-            if any(icon in line_clean for icon in ['📧', '', '📍', '■', '@', '+91', 'linkedin', 'github', 'email']):
+            if any(icon in line_clean for icon in ['📧', '📞', '📍', '■', '@', '+91', 'linkedin', 'github', 'email']):
                 if '|' in line_clean or '@' in line_clean or '+' in line_clean:
                     story.append(Paragraph(line_clean, style_contact))
                     continue
@@ -389,16 +412,13 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(line_clean, style_summary))
                 continue
             
-            # Domain Expertise - Comma-separated with proper wrapping
+            # Domain Expertise - Comma-separated with clean formatting
             if current_section == 'domain expertise':
-                domains = [d.strip() for d in line_clean.replace('  ', ' ').replace('&', '& ').split() if len(d.strip()) > 2]
-                formatted_lines = []
-                for i in range(0, len(domains), 6):
-                    chunk = domains[i:i+6]
-                    if chunk:
-                        formatted_lines.append(', '.join(chunk))
-                
-                for domain_line in formatted_lines:
+                # Clean up: remove double commas, extra spaces
+                domains = [d.strip() for d in line_clean.replace('  ', ' ').split(',') if d.strip() and len(d.strip()) > 2]
+                # Rejoin with proper comma spacing
+                domain_line = ', '.join(domains)
+                if domain_line:
                     story.append(Paragraph(domain_line, style_domain))
                 continue
             
@@ -413,10 +433,11 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                         story.append(Paragraph(formatted, style_content))
                     else:
                         story.append(Paragraph(line_clean, style_content))
-                elif line_clean.startswith('•') or line_clean.startswith('-') or line_clean.startswith('■'):
+                elif line_clean.startswith('•') or line_clean.startswith('-'):
                     content = line_clean[1:].strip()
-                    bullet_text = f"• {content}"
-                    story.append(Paragraph(bullet_text, style_bullet))
+                    if content:  # Only add if there's actual content
+                        bullet_text = f"• {content}"
+                        story.append(Paragraph(bullet_text, style_bullet))
                 else:
                     story.append(Paragraph(line_clean, style_content))
                 continue
@@ -427,7 +448,8 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(line_clean, style_content))
                 elif line_clean.startswith('•') or line_clean.startswith('-'):
                     content = line_clean[1:].strip()
-                    story.append(Paragraph(f"• {content}", style_bullet))
+                    if content:
+                        story.append(Paragraph(f"• {content}", style_bullet))
                 else:
                     story.append(Paragraph(line_clean, style_content))
                 continue
@@ -436,7 +458,8 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             if current_section == 'certifications':
                 if line_clean.startswith('•') or line_clean.startswith('-') or line_clean.startswith('■') or line_clean.startswith('🏅'):
                     content = line_clean[1:].strip()
-                    story.append(Paragraph(f"• {content}", style_bullet))
+                    if content:
+                        story.append(Paragraph(f"• {content}", style_bullet))
                 else:
                     story.append(Paragraph(line_clean, style_content))
                 continue
@@ -447,7 +470,8 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     content = line_clean.replace('**', '').strip()
                     if content.startswith('-') or content.startswith('•'):
                         content = content[1:].strip()
-                    story.append(Paragraph(f"• {content}", style_bullet))
+                    if content:
+                        story.append(Paragraph(f"• {content}", style_bullet))
                 else:
                     story.append(Paragraph(line_clean, style_content))
                 continue
@@ -456,7 +480,8 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             if current_section == 'key projects':
                 if line_clean.startswith('•') or line_clean.startswith('-') or line_clean.startswith('■') or line_clean.startswith('📌'):
                     content = line_clean[1:].strip()
-                    story.append(Paragraph(f"• {content}", style_bullet))
+                    if content:
+                        story.append(Paragraph(f"• {content}", style_bullet))
                 else:
                     story.append(Paragraph(line_clean, style_content))
                 continue
@@ -585,18 +610,24 @@ You are an expert Resume Writer specializing in ATS-optimized IT Business Analys
 CRITICAL OBJECTIVE:
 Generate a resume that achieves **85%+ keyword match** with the Job Description.
 
+OUTPUT FORMAT RULES (CRITICAL):
+1. NO double commas (,,) anywhere in the resume
+2. NO markdown formatting (**, ##, #, etc.)
+3. NO separator lines (---)
+4. NO footer lines
+5. NO meta-instructional text
+6. Use standard bullet points (•) consistently
+7. Clean, professional formatting only
+
 STRATEGIC APPROACH FOR 85%+ MATCH:
 
 1. **DOMAIN EXPERTISE - COMBINE CANDIDATE + JOB REQUIREMENTS:**
-   - If candidate has "Banking" and job needs "Insurance" → List: "Banking, Insurance, Financial Services"
-   - If candidate has "Healthcare" and job needs "Finance" → List: "Healthcare, Finance, BFSI"
+   - Format: "Banking, Insurance, Financial Services, Healthcare, E-commerce" (single commas, proper spacing)
    - Include ALL domains from candidate's resume PLUS ALL domains from job description
-   - Format: Comma-separated, 5-6 domains per line for proper wrapping
+   - 5-6 domains per line for proper wrapping
 
 2. **SKILLS INTEGRATION - MERGE CANDIDATE + JD SKILLS:**
    - Add ALL tools/skills from JD that relate to candidate's experience
-   - If candidate knows "SQL" and job needs "ETL" → Add: "ETL Tools (Talend, Informatica)"
-   - If candidate knows "Tableau" and job needs "Qlik Sense" → Add: "Qlik Sense, Tableau, Power BI"
    - Mark unfamiliar skills as "(Familiar)" or "(Basic)" if needed
    - Include 90%+ of JD keywords in skills section
 
@@ -613,17 +644,13 @@ STRATEGIC APPROACH FOR 85%+ MATCH:
    - Add metrics from candidate's original resume
    - Each bullet should include 1-2 JD keywords
 
-5. **CERTIFICATIONS & EDUCATION:**
-   - Keep candidate's actual certifications
-   - Add relevant certifications from JD as "In Progress" or "Planned" if appropriate
-
 TEMPLATE STRUCTURE (FOLLOW EXACTLY - Priya Sharma Format):
 
 1. Name (centered, bold, 16pt)
 2. Title (IT Business Analyst | Agile BA | Requirements Engineer)
 3. Contact Info (📧 Email |  Phone | 📍 Location | LinkedIn | GitHub)
 4. Professional Summary (4-5 lines, justified, 80% JD keywords)
-5. Domain Expertise (Candidate's domains + Job's domains, comma-separated)
+5. Domain Expertise (Candidate's domains + Job's domains, comma-separated with SINGLE commas)
 6. Professional Experience (Role | Company — Location | Date | Bullets)
 7. Certifications (🏅 Cert Name — Issuer | Year)
 8. Technical & Professional Skills (All candidate skills + JD skills)
@@ -636,15 +663,16 @@ FORMATTING RULES:
 - Use emojis: 📧 for contact, 🏅 for certs, 📌 for projects
 - Quantify achievements (%, $, numbers)
 - ATS-compatible (Workday, Taleo, Lever, Greenhouse)
-- DO NOT include footer line at bottom
-- DO NOT include meta-instructional text (Critical Success Factors, etc.)
-- DO NOT include optimization notes or AI-generated comments
+- NO footer line at bottom
+- NO meta-instructional text
+- NO double commas (,,)
+- NO separator lines (---)
 - OUTPUT ONLY THE RESUME CONTENT - no explanations, no notes
 
-DOMAIN EXPERTISE EXAMPLE:
+DOMAIN EXPERTISE EXAMPLE (CORRECT FORMAT):
 Banking, Insurance, Financial Services, Healthcare, E-commerce, Retail
 
-SKILLS SECTION EXAMPLE:
+SKILLS SECTION EXAMPLE (CORRECT FORMAT):
 • Tools: JIRA, Confluence, Tableau, Power BI, Qlik Sense, Visio, Lucidchart
 • Databases: SQL (Advanced), PL/SQL, MySQL, PostgreSQL
 • Methodologies: Agile, Scrum, SAFe, Waterfall, SDLC
@@ -653,12 +681,14 @@ SKILLS SECTION EXAMPLE:
 
 CRITICAL OUTPUT RULES:
 - Achieve 85%+ keyword match with JD
-- Include ALL JD-required domains in Domain Expertise
+- Include ALL JD-required domains in Domain Expertise (with SINGLE commas)
 - Include ALL JD-required skills in Skills section
 - Use JD language in Professional Summary and Experience bullets
 - Maintain credibility by marking unfamiliar skills appropriately
 - Quantify achievements with candidate's actual metrics
 - OUTPUT ONLY RESUME CONTENT - no footers, no notes, no AI comments
+- NO double commas anywhere
+- NO markdown formatting
 """
 
 RESUME_GEN_USER_PROMPT = """
@@ -693,14 +723,13 @@ INSTRUCTIONS FOR 85%+ MATCH:
    **Domain Expertise:**
    - List ALL domains from candidate's resume
    - Add ALL domains from job description
-   - Format: Comma-separated, 5-6 per line
-   - Example: "Banking, Insurance, Financial Services, Healthcare, E-commerce"
+   - Format: Comma-separated with SINGLE commas (e.g., "Banking, Insurance, Financial Services")
+   - 5-6 domains per line
    
    **Skills Section:**
    - Include ALL candidate's skills
    - Add ALL JD-required skills (mark as "Familiar" if not expert)
    - Group by category: Tools, Databases, Methodologies, ETL, Languages
-   - Example: "Qlik Sense (Familiar), Tableau (Advanced), Power BI (Advanced)"
    
    **Experience Bullets:**
    - Use candidate's actual achievements
@@ -721,8 +750,11 @@ INSTRUCTIONS FOR 85%+ MATCH:
 5. **FINAL OUTPUT RULES:**
    - OUTPUT ONLY THE RESUME CONTENT
    - NO footer line at bottom
-   - NO meta-instructional text (Critical Success Factors, optimization notes, etc.)
+   - NO meta-instructional text
    - NO AI comments, explanations, or notes
+   - NO double commas (,,)
+   - NO markdown formatting (**, ##, #)
+   - NO separator lines (---)
    - Just the clean resume following Priya Sharma template
 
 Generate the ATS-optimized resume following this exact structure to achieve 85%+ match.
