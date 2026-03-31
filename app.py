@@ -544,77 +544,77 @@ Here is the Job Description:
 Generate the Validation Report in this EXACT format:
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                 IT-BUSINESS ANALYST RESUME VALIDATION REPORT                 ║
+║                 IT-BUSINESS ANALYST RESUME VALIDATION REPORT                  ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║   Candidate: [Extract Name]                                                  ║
-║   Job Position: [Extract Job Title]                                          ║
-║   Analysis Date: [Current Date in YYYY-MM-DD format]                         ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║   🎯 **OVERALL ELIGIBILITY: [XX]%**                                          ║
-║   ✅ **GOOD MATCH - RECOMMENDED** (Or ❌ **LOW MATCH - NOT RECOMMENDED**)    ║
+║   Candidate: [Extract Name]                                                        ║
+║   Job Position: [Extract Job Title]                         ║
+║   Analysis Date: [Current Date in YYYY-MM-DD format]                                                  ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║   📈 **SCORE BREAKDOWN:**                                                    ║
-║                                                                              ║
-║   • Education:           **[XX]%**  [Draw Bar with █ and ▒ - 10 chars]       ║
-║   • Functional Skills:   **[XX]%**  [Draw Bar]                               ║
-║   • Experience:          **[XX]%**  [Draw Bar]                               ║
+║   🎯 **OVERALL ELIGIBILITY: [XX]%**                                              ║
+║   ✅ **GOOD MATCH - RECOMMENDED** (Or ❌ **LOW MATCH - NOT RECOMMENDED**)                                              ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║   🔍 **DETAILED ANALYSIS BY FACTOR**                                         ║
+║   📈 **SCORE BREAKDOWN:**                                                      ║
 ║                                                                              ║
-║   🎓 **EDUCATION ([XX]% Match)**                                             ║
-║   ────────────────────────────────────────────────────────────────────────── ║
-║   ✅ **Matched:**                                                            ║
-║      • [List Matched Items - be specific]                                    ║
-║                                                                              ║
-║   ❌ **Missing:**                                                            ║
-║      • [List Missing Items]                                                  ║
-║                                                                              ║
-║   🔧 **FUNCTIONAL SKILLS ([XX]% Match)**                                     ║
-║   ────────────────────────────────────────────────────────────────────────── ║
-║   ✅ **Matched Skills:**                                                     ║
-║      • [List Skills - be specific]                                           ║
-║                                                                              ║
-║   ❌ **Missing Skills:**                                                     ║
-║      • [List Skills - be specific]                                           ║
-║                                                                              ║
-║   💼 **EXPERIENCE ([XX]% Match)**                                            ║
-║   ────────────────────────────────────────────────────────────────────────── ║
-║   ✅ **Matched:**                                                            ║
-║      • [List Matches - be specific]                                          ║
-║                                                                              ║
-║   ❌ **Missing/Gaps:**                                                       ║
-║      • [List Gaps - be specific]                                             ║
+║   • Education:           **[XX]%**  [Draw Bar with █ and ▒ - 10 chars]                                ║
+║   • Functional Skills:   **[XX]%**  [Draw Bar]                                 ║
+║   • Experience:          **[XX]%**  [Draw Bar]                                 ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║   💡 **RECOMMENDATIONS:**                                                    ║
+║   🔍 **DETAILED ANALYSIS BY FACTOR**                                           ║
 ║                                                                              ║
-║   1. [Specific Recommendation 1]                                             ║
-║   2. [Specific Recommendation 2]                                             ║
-║   3. [Specific Recommendation 3]                                             ║
+║   🎓 **EDUCATION ([XX]% Match)**                                                 ║
+║   ──────────────────────────────────────────────────────────────────────────║
+║   ✅ **Matched:**                                                              ║
+║      • [List Matched Items - be specific]                   ║
+║                                                                              ║
+║   ❌ **Missing:**                                                              ║
+║      • [List Missing Items]                         ║
+║                                                                              ║
+║   🔧 **FUNCTIONAL SKILLS ([XX]% Match)**                                         ║
+║   ──────────────────────────────────────────────────────────────────────────║
+║   ✅ **Matched Skills:**                                                       ║
+║      • [List Skills - be specific]                                            ║
+║                                                                              ║
+║   ❌ **Missing Skills:**                                                       ║
+║      • [List Skills - be specific]                                        ║
+║                                                                              ║
+║   💼 **EXPERIENCE ([XX]% Match)**                                                ║
+║   ──────────────────────────────────────────────────────────────────────────║
+║   ✅ **Matched:**                                                              ║
+║      • [List Matches - be specific]                           ║
+║                                                                              ║
+║   ❌ **Missing/Gaps:**                                                         ║
+║      • [List Gaps - be specific]        ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║   📊 **FACTOR SUMMARY:**                                                     ║
-║   ────────────────────────────────────────────────────────────────────────── ║
-║   • Education:        [Brief Summary]                                        ║
-║   • Skills:           [Brief Summary]                                        ║             
-║   • Experience:       [Brief Summary]                                        ║
+║   💡 **RECOMMENDATIONS:**                                                      ║
+║                                                                              ║
+║   1. [Specific Recommendation 1]     ║
+║   2. [Specific Recommendation 2]       ║
+║   3. [Specific Recommendation 3]                     ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║   📌 **ELIGIBILITY ASSESSMENT:**                                             ║
-║   **[XX]% Overall - [Verdict: RECOMMENDED/NOT RECOMMENDED for interview]**   ║
+║   📊 **FACTOR SUMMARY:**                                                       ║
+║   ──────────────────────────────────────────────────────────────────────────║
+║   • Education:        [Brief Summary]       ║
+║   • Skills:           [Brief Summary]       ║
+║   • Experience:       [Brief Summary]       ║
 ║                                                                              ║
-║   • [Key Point 1]                                                            ║
-║   • [Key Point 2]                                                            ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║   📌 **ELIGIBILITY ASSESSMENT:**                                               ║
+║   **[XX]% Overall - [Verdict: RECOMMENDED/NOT RECOMMENDED for interview]**    ║
+║                                                                              ║
+║   • [Key Point 1]                         ║
+║   • [Key Point 2]                              ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
@@ -848,7 +848,8 @@ def main():
         uploaded_file = st.file_uploader(
             "Choose a file", 
             type=['pdf', 'docx', 'txt'],
-            help="Upload your current resume (PDF, DOCX, or TXT)"
+            help="Upload your current resume (PDF, DOCX, or TXT)",
+            key="resume_uploader"  # Unique key for reset functionality
         )
         
         if uploaded_file:
@@ -867,7 +868,8 @@ def main():
 - Responsibilities
 - Domain requirements (Banking, Insurance, etc.)
 - Tools and technologies""",
-            help="Copy and paste the complete job posting for best results"
+            help="Copy and paste the complete job posting for best results",
+            key="jd_textarea"  # Unique key for reset functionality
         )
         
         if jd_text:
@@ -880,13 +882,19 @@ def main():
         with col_btn1:
             validate_btn = st.button("🔍 Validate Resume", type="primary", use_container_width=True)
         with col_btn2:
-            reset_btn = st.button("🔄 Reset", use_container_width=True)
+            reset_btn = st.button("🔄 Reset All", use_container_width=True, key="reset_button")
         
-        # Reset functionality
+        # Reset functionality - CLEAR EVERYTHING
         if reset_btn:
-            st.session_state.validation_report = None
-            st.session_state.generated_resume = None
-            st.session_state.resume_text = None
+            # Clear all session state variables
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            
+            # Show success message
+            st.success("✅ All data cleared! Ready for fresh operation.")
+            st.info("🔄 Page will refresh in 2 seconds...")
+            
+            # Force a complete rerun
             st.rerun()
         
         st.markdown("---")
