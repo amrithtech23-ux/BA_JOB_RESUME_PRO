@@ -3,6 +3,7 @@ import requests
 import os
 import tempfile
 import re
+import time
 from datetime import datetime
 from pypdf import PdfReader
 from docx import Document
@@ -175,7 +176,22 @@ def test_api_connection(api_key):
         st.error(f"❌ Connection test failed: {str(e)}")
         return False
 
-def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.5-72b-instruct", max_tokens=4000):
+def call_openrouter_api_with_retry(prompt, system_instruction, api_key, model="qwen/qwen-2.5-72b-instruct", max_tokens=3000, max_retries=2):
+    """Calls OpenRouter API with retry logic and better error handling."""
+    
+    for attempt in range(max_retries + 1):
+        result = call_openrouter_api(prompt, system_instruction, api_key, model, max_tokens)
+        if result is not None:
+            return result
+        
+        if attempt < max_retries:
+            st.warning(f"⚠️ Attempt {attempt + 1} failed. Retrying in 5 seconds...")
+            time.sleep(5)
+    
+    st.error("❌ All retry attempts failed. Please try again later or use a different model.")
+    return None
+
+def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.5-72b-instruct", max_tokens=3000):
     """Calls OpenRouter API with comprehensive error handling."""
     
     # Validate inputs
@@ -193,7 +209,7 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
     
     # Check prompt length (OpenRouter has limits)
     prompt_length = len(prompt) + len(system_instruction)
-    max_safe_length = 60000  # Conservative limit for safety
+    max_safe_length = 40000  # Very conservative limit
     
     if prompt_length > max_safe_length:
         st.warning(f"⚠️ Prompt is very long ({prompt_length} chars). Truncating...")
@@ -234,7 +250,7 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
                 st.info("💡 **Fix:** Click 'Test API Connection' in sidebar or update your API key")
             elif response.status_code == 400:
                 st.error("📝 Bad request. The request format may be invalid.")
-                st.info("💡 **Possible causes:**\n- Prompt too long\n- Special characters in text\n- Invalid model\n\n**Try:**\n1. Test API Connection in sidebar\n2. Try a different model (e.g., openai/gpt-3.5-turbo)\n3. Shorten your resume or job description\n4. Check your API credits at openrouter.ai")
+                st.info("💡 **Possible causes:**\n- Prompt too long\n- Special characters in text\n- Invalid model\n\n**Try:**\n1. Test API Connection in sidebar\n2. Try a different model (e.g., openai/gpt-3.5-turbo)\n3. Shorten your resume or job description\n4. Check your API credits at openrouter.ai\n5. Wait 60 seconds if rate limited")
             elif response.status_code == 429:
                 st.error("⏱️ Rate limit exceeded. Please wait 60 seconds and try again.")
             elif response.status_code == 500:
@@ -826,10 +842,10 @@ def generate_word_resume(resume_text, filename="ATS_Optimized_Resume.docx"):
         return None
 
 # ============================================
-# Prompts - Optimized for API
+# Prompts - Optimized for API (SHORTER)
 # ============================================
 
-VALIDATION_SYSTEM_PROMPT = """You are an expert IT Business Analyst Hiring Manager. Compare the candidate's resume against the job description and output a validation report in the exact ASCII table format shown."""
+VALIDATION_SYSTEM_PROMPT = """You are an IT Business Analyst Hiring Manager. Compare the resume against the job description and output a validation report in ASCII table format."""
 
 VALIDATION_USER_PROMPT = """
 Resume:
@@ -838,56 +854,37 @@ Resume:
 Job Description:
 {jd_text}
 
-Generate validation report in this EXACT format:
+Generate validation report in this format:
 
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                 IT-BUSINESS ANALYST RESUME VALIDATION REPORT                  ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║   Candidate: [Name]                                                          ║
-║   Job Position: [Position]                                                   ║
-║   Analysis Date: [Date]                                                      ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║   🎯 OVERALL ELIGIBILITY: [XX]%                                              ║
-║   ✅ GOOD MATCH - RECOMMENDED                                                 ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║   📈 SCORE BREAKDOWN:                                                         ║
-║                                                                              ║
-║   • Education:           [XX]%                                               ║
-║   • Functional Skills:   [XX]%                                               ║
-║   • Experience:          [XX]%                                               ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║   🔍 DETAILED ANALYSIS:                                                       ║
-║                                                                              ║
-║   ✅ Matched Skills:                                                          ║
-║      • [List skills]                                                          ║
-║                                                                              ║
-║   ❌ Missing Skills:                                                          ║
-║      • [List skills]                                                          ║
-║                                                                              ║
-║   ✅ Matched Experience:                                                      ║
-║      • [List experience]                                                      ║
-║                                                                              ║
-║   ❌ Missing Experience:                                                      ║
-║      • [List gaps]                                                            ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║   💡 RECOMMENDATIONS:                                                         ║
-║   1. [Recommendation 1]                                                      ║
-║   2. [Recommendation 2]                                                      ║
-║   3. [Recommendation 3]                                                      ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════╗
+║         IT-BUSINESS ANALYST RESUME VALIDATION REPORT              ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Candidate: [Name]                                               ║
+║  Job Position: [Position]                                        ║
+║  Analysis Date: [Date]                                           ║
+╠══════════════════════════════════════════════════════════════════╣
+║  🎯 OVERALL ELIGIBILITY: [XX]%                                   ║
+║  ✅ GOOD MATCH - RECOMMENDED                                     ║
+╠══════════════════════════════════════════════════════════════════╣
+║  📈 SCORE BREAKDOWN:                                             ║
+║  • Education: [XX]%                                              ║
+║  • Functional Skills: [XX]%                                      ║
+║  • Experience: [XX]%                                             ║
+╠══════════════════════════════════════════════════════════════════╣
+║  🔍 DETAILED ANALYSIS:                                           ║
+║  ✅ Matched Skills: [List]                                       ║
+║  ❌ Missing Skills: [List]                                       ║
+║  ✅ Matched Experience: [List]                                   ║
+║  ❌ Missing Experience: [List]                                   ║
+╠══════════════════════════════════════════════════════════════════╣
+║  💡 RECOMMENDATIONS:                                             ║
+║  1. [Recommendation 1]                                           ║
+║  2. [Recommendation 2]                                           ║
+║  3. [Recommendation 3]                                           ║
+╚══════════════════════════════════════════════════════════════════╝
 """
 
-RESUME_GEN_SYSTEM_PROMPT = """You are an expert Resume Writer. Create an ATS-optimized resume that achieves 85%+ match with the job description. Follow the Priya Sharma template format exactly. NO footers, NO meta-text, NO all-caps sections, NO instructional text."""
+RESUME_GEN_SYSTEM_PROMPT = """You are an expert Resume Writer. Create an ATS-optimized resume achieving 85%+ match with the job description. Follow the Priya Sharma template format. NO footers, NO meta-text."""
 
 RESUME_GEN_USER_PROMPT = """
 Original Resume:
@@ -896,7 +893,7 @@ Original Resume:
 Job Description:
 {jd_text}
 
-Create ATS-optimized resume following this structure:
+Create ATS-optimized resume:
 1. Name
 2. Title (IT Business Analyst | Agile BA | Requirements Engineer)
 3. Contact Info
@@ -908,14 +905,13 @@ Create ATS-optimized resume following this structure:
 9. Key Projects
 10. Education
 
-CRITICAL RULES:
+Rules:
 - Combine candidate's domains with job-required domains
 - Include 90%+ of JD keywords
 - Use standard formatting, NO markdown
 - NO double commas
 - NO footers
-- NO meta-text like "Critical Success Factors" or "Functional Skills:"
-- Output ONLY the resume content - nothing else
+- Output ONLY the resume content
 """
 
 # ============================================
@@ -1037,22 +1033,22 @@ def main():
                 with st.spinner("🔍 Analyzing resume against job description..."):
                     st.session_state.processing = True
                     
-                    # Prepare prompt with size limits
-                    resume_text = st.session_state.resume_text[:2500]  # Limit to 2500 chars
-                    jd_text_limited = jd_text[:1500]  # Limit to 1500 chars
+                    # Prepare prompt with VERY SMALL size limits
+                    resume_text = st.session_state.resume_text[:2000]  # Limit to 2000 chars
+                    jd_text_limited = jd_text[:1000]  # Limit to 1000 chars
                     
                     prompt = VALIDATION_USER_PROMPT.format(
                         resume_text=resume_text,
                         jd_text=jd_text_limited
                     )
                     
-                    # Call API
-                    report = call_openrouter_api(
+                    # Call API with retry
+                    report = call_openrouter_api_with_retry(
                         prompt, 
                         VALIDATION_SYSTEM_PROMPT, 
                         api_key,
                         model,
-                        max_tokens=2500
+                        max_tokens=2000
                     )
                     
                     st.session_state.processing = False
@@ -1063,7 +1059,7 @@ def main():
                         st.rerun()
                     else:
                         st.error("❌ Failed to generate validation report.")
-                        st.info("💡 **Troubleshooting:**\n1. Click 'Test API Connection' in sidebar\n2. Check your API credits at openrouter.ai\n3. Try a different model (e.g., openai/gpt-3.5-turbo)\n4. Shorten your resume or job description")
+                        st.info("💡 **Troubleshooting:**\n1. Click 'Test API Connection' in sidebar\n2. Check your API credits at openrouter.ai\n3. Try a different model (e.g., openai/gpt-3.5-turbo)\n4. Shorten your resume or job description\n5. Wait 60 seconds if rate limited")
         
         # Display Validation Report
         if st.session_state.validation_report:
@@ -1085,21 +1081,21 @@ def main():
                 if st.button("✨ Generate ATS Optimized Resume", type="primary",
                            key=f"generate_btn_{st.session_state.reset_counter}"):
                     with st.spinner("✍️ Generating new ATS-optimized resume..."):
-                        # Prepare prompt with size limits
-                        resume_text = st.session_state.resume_text[:3500]
-                        jd_text_limited = jd_text[:2500]
+                        # Prepare prompt with VERY SMALL size limits
+                        resume_text = st.session_state.resume_text[:3000]
+                        jd_text_limited = jd_text[:2000]
                         
                         prompt = RESUME_GEN_USER_PROMPT.format(
                             resume_text=resume_text,
                             jd_text=jd_text_limited
                         )
                         
-                        new_resume = call_openrouter_api(
+                        new_resume = call_openrouter_api_with_retry(
                             prompt, 
                             RESUME_GEN_SYSTEM_PROMPT, 
                             api_key,
                             model,
-                            max_tokens=4000
+                            max_tokens=3500
                         )
                         
                         if new_resume:
@@ -1194,4 +1190,3 @@ if __name__ == "__main__":
     except Exception as e:
         st.error(f"❌ Application error: {str(e)}")
         st.exception(e)
- 
