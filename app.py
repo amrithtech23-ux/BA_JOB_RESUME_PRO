@@ -191,7 +191,7 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
     
     # Check prompt length (OpenRouter has limits)
     prompt_length = len(prompt) + len(system_instruction)
-    max_safe_length = 80000  # Conservative limit for safety
+    max_safe_length = 60000  # Conservative limit for safety
     
     if prompt_length > max_safe_length:
         st.warning(f"⚠️ Prompt is very long ({prompt_length} chars). Truncating...")
@@ -793,8 +793,8 @@ def main():
                     st.session_state.processing = True
                     
                     # Prepare prompt with size limits
-                    resume_text = st.session_state.resume_text[:3000]  # Limit to 3000 chars
-                    jd_text_limited = jd_text[:2000]  # Limit to 2000 chars
+                    resume_text = st.session_state.resume_text[:2500]  # Limit to 2500 chars
+                    jd_text_limited = jd_text[:1500]  # Limit to 1500 chars
                     
                     prompt = VALIDATION_USER_PROMPT.format(
                         resume_text=resume_text,
@@ -807,7 +807,7 @@ def main():
                         VALIDATION_SYSTEM_PROMPT, 
                         api_key,
                         model,
-                        max_tokens=3000
+                        max_tokens=2500
                     )
                     
                     st.session_state.processing = False
@@ -818,7 +818,7 @@ def main():
                         st.rerun()
                     else:
                         st.error("❌ Failed to generate validation report.")
-                        st.info("💡 **Troubleshooting:**\n1. Click 'Test API Connection' in sidebar\n2. Check your API credits at openrouter.ai\n3. Try a different model (e.g., openai/gpt-3.5-turbo)\n4. Shorten your resume or job description\n5. Wait 60 seconds if rate limited")
+                        st.info("💡 **Troubleshooting:**\n1. Click 'Test API Connection' in sidebar\n2. Check your API credits at openrouter.ai\n3. Try a different model (e.g., openai/gpt-3.5-turbo)\n4. Shorten your resume or job description")
         
         # Display Validation Report
         if st.session_state.validation_report:
@@ -841,8 +841,8 @@ def main():
                            key=f"generate_btn_{st.session_state.reset_counter}"):
                     with st.spinner("✍️ Generating new ATS-optimized resume..."):
                         # Prepare prompt with size limits
-                        resume_text = st.session_state.resume_text[:4000]
-                        jd_text_limited = jd_text[:3000]
+                        resume_text = st.session_state.resume_text[:3500]
+                        jd_text_limited = jd_text[:2500]
                         
                         prompt = RESUME_GEN_USER_PROMPT.format(
                             resume_text=resume_text,
@@ -854,7 +854,7 @@ def main():
                             RESUME_GEN_SYSTEM_PROMPT, 
                             api_key,
                             model,
-                            max_tokens=5000
+                            max_tokens=4000
                         )
                         
                         if new_resume:
