@@ -1194,3 +1194,4 @@ if __name__ == "__main__":
     except Exception as e:
         st.error(f"❌ Application error: {str(e)}")
         st.exception(e)
+ 
