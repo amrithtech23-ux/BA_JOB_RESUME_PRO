@@ -64,6 +64,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================
+# Initialize Session State
+# ============================================
+if 'reset_counter' not in st.session_state:
+    st.session_state.reset_counter = 0
+if 'validation_report' not in st.session_state:
+    st.session_state.validation_report = None
+if 'generated_resume' not in st.session_state:
+    st.session_state.generated_resume = None
+if 'resume_text' not in st.session_state:
+    st.session_state.resume_text = None
+if 'processing' not in st.session_state:
+    st.session_state.processing = False
+
+# ============================================
 # Helper Functions
 # ============================================
 
@@ -99,7 +113,8 @@ def get_api_key():
     except:
         pass
     return st.text_input("OpenRouter API Key", type="password", 
-                        help="Get your key from https://openrouter.ai/keys")
+                        help="Get your key from https://openrouter.ai/keys",
+                        key=f"api_key_input_{st.session_state.reset_counter}")
 
 def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.5-72b-instruct", max_tokens=4000):
     """Calls OpenRouter API using Qwen model with robust error handling."""
@@ -159,9 +174,9 @@ def clean_resume_text(text):
     text = text.replace('**', '').replace('##', '').replace('#', '').replace('###', '')
     
     # Fix double commas and spacing issues
-    text = re.sub(r',,+', ',', text)  # Replace multiple commas with single
-    text = re.sub(r'\s+,', ',', text)  # Remove space before comma
-    text = re.sub(r',\s+', ', ', text)  # Ensure single space after comma
+    text = re.sub(r',,+', ',', text)
+    text = re.sub(r'\s+,', ',', text)
+    text = re.sub(r',\s+', ', ', text)
     
     # Fix double spaces
     text = re.sub(r' {2,}', ' ', text)
@@ -178,25 +193,18 @@ def clean_resume_text(text):
     cleaned_lines = []
     for line in lines:
         stripped = line.strip()
-        # Skip lines that are just bullets, dashes, or very short
         if stripped and len(stripped) > 2 and not re.match(r'^[•\-–—\|]+$', stripped):
             cleaned_lines.append(line)
     
     text = '\n'.join(cleaned_lines)
     
-    # Remove extra blank lines (more than 2 consecutive)
+    # Remove extra blank lines
     text = re.sub(r'\n{3,}', '\n\n', text)
     
     return text.strip()
 
 def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
-    """
-    Generates ATS-friendly PDF with proper formatting.
-    - Professional Summary: Justified alignment
-    - Domain Expertise: Left-aligned, comma-separated (clean formatting)
-    - Experience/Skills/Projects/Education: Left-aligned with proper indentation
-    - NO Footer, NO meta-text, NO separators
-    """
+    """Generates ATS-friendly PDF with proper formatting."""
     try:
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
         temp_filename = temp_file.name
@@ -213,11 +221,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         
         styles = getSampleStyleSheet()
         
-        # ============================================
-        # Custom Styles - Clean Professional Format
-        # ============================================
-        
-        # Name/Title
+        # Custom Styles
         style_title = ParagraphStyle(
             'TitleStyle',
             parent=styles['Heading1'],
@@ -238,7 +242,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             spaceAfter=8
         )
         
-        # Contact info - Centered
         style_contact = ParagraphStyle(
             'ContactStyle',
             parent=styles['Normal'],
@@ -249,7 +252,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             spaceAfter=10
         )
         
-        # Section headers - Left aligned, bold, uppercase
         style_heading = ParagraphStyle(
             'HeadingStyle',
             parent=styles['Heading2'],
@@ -263,7 +265,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             textTransform='uppercase'
         )
         
-        # Professional Summary - Justified
         style_summary = ParagraphStyle(
             'SummaryStyle',
             parent=styles['Normal'],
@@ -276,7 +277,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             rightIndent=0
         )
         
-        # Domain Expertise - Left aligned, comma-separated
         style_domain = ParagraphStyle(
             'DomainStyle',
             parent=styles['Normal'],
@@ -289,7 +289,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             rightIndent=0
         )
         
-        # Content - Left aligned
         style_content = ParagraphStyle(
             'ContentStyle',
             parent=styles['Normal'],
@@ -301,7 +300,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             leftIndent=0
         )
         
-        # Bullet points - Consistent indentation
         style_bullet = ParagraphStyle(
             'BulletStyle',
             parent=styles['Normal'],
@@ -314,12 +312,8 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             firstLineIndent=-15
         )
 
-        # ============================================
-        # Parse and Format Resume Content
-        # ============================================
+        # Parse and Format
         story = []
-        
-        # Clean the text first
         resume_text = clean_resume_text(resume_text)
         lines = resume_text.split('\n')
         
@@ -327,23 +321,14 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         is_first_line = True
         skip_section = False
         
-        # Keywords to skip (meta-text, footers, separators)
         skip_keywords = [
-            'critical success factors',
-            'achieve 85%+ keyword match',
-            'include all jd-required domains',
-            'use jd language in professional summary',
-            'this resume is optimized for ats',
-            'designed to achieve an 85%+',
-            'include, all, jd-required, skills',
-            'footer:',
-            'footer',
+            'critical success factors', 'achieve 85%+ keyword match',
+            'include all jd-required domains', 'use jd language in professional summary',
+            'this resume is optimized for ats', 'designed to achieve an 85%+',
+            'include, all, jd-required, skills', 'footer:', 'footer',
             'ats-optimized resume | it business analyst | last updated',
-            'last updated:',
-            'optimization notes',
-            'ai-generated',
-            'meta-instructional',
-            'functional skills:'  # Skip the all-caps functional skills header
+            'last updated:', 'optimization notes', 'ai-generated',
+            'meta-instructional', 'functional skills:'
         ]
         
         for line in lines:
@@ -356,14 +341,10 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             line_clean = line_stripped
             line_lower = line_clean.lower()
             
-            # ============================================
-            # SKIP META-INSTRUCTIONAL SECTIONS
-            # ============================================
             if any(keyword in line_lower for keyword in skip_keywords):
                 skip_section = True
                 continue
             
-            # Reset skip flag if we hit a real section header
             if any(header in line_lower for header in ['professional summary', 'domain expertise', 
                                                          'professional experience', 'certifications',
                                                          'technical', 'key projects', 'education']):
@@ -372,9 +353,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             if skip_section:
                 continue
             
-            # ============================================
-            # Detect Section Headers
-            # ============================================
             section_keywords = {
                 'professional summary': 'professional summary',
                 'domain expertise': 'domain expertise',
@@ -398,46 +376,34 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
             if is_header:
                 continue
             
-            # ============================================
-            # Format Content by Section
-            # ============================================
-            
-            # Name (first non-empty line)
             if is_first_line and len(line_clean.split()) <= 3:
                 if not any(c in line_clean for c in ['@', '📧', '📞', '📍', '■', '|', '—', '•', ':', '+']):
                     story.append(Paragraph(line_clean, style_title))
                     is_first_line = False
                     continue
             
-            # Title/Role
             if is_first_line and any(term in line_clean for term in ['Business Analyst', 'Agile BA', 'Requirements Engineer']):
                 story.append(Paragraph(line_clean, style_subtitle))
                 is_first_line = False
                 continue
             
-            # Contact info
             if any(icon in line_clean for icon in ['📧', '📞', '📍', '■', '@', '+91', 'linkedin', 'github', 'email']):
                 if '|' in line_clean or '@' in line_clean or '+' in line_clean:
                     story.append(Paragraph(line_clean, style_contact))
                     continue
             
-            # Professional Summary - Justified
             if current_section == 'professional summary':
                 if not line_clean.startswith('•') and not line_clean.startswith('-'):
                     story.append(Paragraph(line_clean, style_summary))
                 continue
             
-            # Domain Expertise - Comma-separated with clean formatting
             if current_section == 'domain expertise':
-                # Clean up: remove double commas, extra spaces, normalize
                 domains = [d.strip() for d in line_clean.replace('  ', ' ').split(',') if d.strip() and len(d.strip()) > 2]
-                # Rejoin with proper comma spacing
                 domain_line = ', '.join(domains)
-                if domain_line and len(domain_line) > 5:  # Only add if meaningful content
+                if domain_line and len(domain_line) > 5:
                     story.append(Paragraph(domain_line, style_domain))
                 continue
             
-            # Professional Experience - Left aligned with bullets
             if current_section == 'professional experience':
                 if '|' in line_clean and '—' in line_clean:
                     parts = line_clean.split('|')
@@ -450,14 +416,13 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                         story.append(Paragraph(line_clean, style_content))
                 elif line_clean.startswith('•') or line_clean.startswith('-'):
                     content = line_clean[1:].strip()
-                    if content and len(content) > 10:  # Only add if there's actual content
+                    if content and len(content) > 10:
                         bullet_text = f"• {content}"
                         story.append(Paragraph(bullet_text, style_bullet))
                 else:
                     story.append(Paragraph(line_clean, style_content))
                 continue
             
-            # Education - Left aligned
             if current_section == 'education':
                 if '—' in line_clean or '|' in line_clean:
                     story.append(Paragraph(line_clean, style_content))
@@ -469,7 +434,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(line_clean, style_content))
                 continue
             
-            # Certifications - Left aligned with bullets
             if current_section == 'certifications':
                 if line_clean.startswith('•') or line_clean.startswith('-') or line_clean.startswith('■') or line_clean.startswith('🏅'):
                     content = line_clean[1:].strip()
@@ -479,7 +443,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(line_clean, style_content))
                 continue
             
-            # Technical Skills - Left aligned
             if current_section == 'technical & professional skills':
                 if line_clean.startswith('•') or line_clean.startswith('-') or line_clean.startswith('**'):
                     content = line_clean.replace('**', '').strip()
@@ -491,7 +454,6 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(line_clean, style_content))
                 continue
             
-            # Key Projects - Left aligned with bullets
             if current_section == 'key projects':
                 if line_clean.startswith('•') or line_clean.startswith('-') or line_clean.startswith('■') or line_clean.startswith('📌'):
                     content = line_clean[1:].strip()
@@ -501,12 +463,8 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
                     story.append(Paragraph(line_clean, style_content))
                 continue
             
-            # Default fallback
             story.append(Paragraph(line_clean, style_content))
         
-        # ============================================
-        # Build PDF
-        # ============================================
         doc.build(story)
         return temp_filename
         
@@ -517,7 +475,7 @@ def generate_pdf_resume(resume_text, filename="ATS_Optimized_Resume.pdf"):
         return None
 
 # ============================================
-# Prompts - Strategic Skill Matching for 85%+ Match
+# Prompts
 # ============================================
 
 VALIDATION_SYSTEM_PROMPT = """
@@ -531,7 +489,6 @@ OUTPUT REQUIREMENTS:
 4. Calculate scores honestly based on keyword matching, experience relevance, and skill alignment
 5. Be specific about what's matched and what's missing
 6. Use the exact section headers as shown in the template
-7. List ALL missing skills/domains that should be added to resume for 85%+ match
 """
 
 VALIDATION_USER_PROMPT = """
@@ -811,7 +768,8 @@ def main():
             "AI Model",
             ["qwen/qwen-2.5-72b-instruct", "qwen/qwen-2.5-coder-32b-instruct"],
             index=0,
-            help="Qwen model for best results"
+            help="Qwen model for best results",
+            key=f"model_select_{st.session_state.reset_counter}"
         )
         
         # About Section
@@ -849,7 +807,7 @@ def main():
             "Choose a file", 
             type=['pdf', 'docx', 'txt'],
             help="Upload your current resume (PDF, DOCX, or TXT)",
-            key="resume_uploader"  # Unique key for reset functionality
+            key=f"resume_uploader_{st.session_state.reset_counter}"
         )
         
         if uploaded_file:
@@ -869,7 +827,7 @@ def main():
 - Domain requirements (Banking, Insurance, etc.)
 - Tools and technologies""",
             help="Copy and paste the complete job posting for best results",
-            key="jd_textarea"  # Unique key for reset functionality
+            key=f"jd_textarea_{st.session_state.reset_counter}"
         )
         
         if jd_text:
@@ -880,36 +838,31 @@ def main():
         
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            validate_btn = st.button("🔍 Validate Resume", type="primary", use_container_width=True)
+            validate_btn = st.button("🔍 Validate Resume", type="primary", use_container_width=True, 
+                                   key=f"validate_btn_{st.session_state.reset_counter}")
         with col_btn2:
             reset_btn = st.button("🔄 Reset All", use_container_width=True, key="reset_button")
         
-        # Reset functionality - CLEAR EVERYTHING
+        # Reset functionality - CLEAR EVERYTHING PROPERLY
         if reset_btn:
-            # Clear all session state variables
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
+            # Increment reset counter to force re-render of components
+            st.session_state.reset_counter += 1
+            
+            # Clear specific session state variables (NOT all)
+            st.session_state.validation_report = None
+            st.session_state.generated_resume = None
+            st.session_state.resume_text = None
+            st.session_state.processing = False
             
             # Show success message
             st.success("✅ All data cleared! Ready for fresh operation.")
-            st.info("🔄 Page will refresh in 2 seconds...")
+            st.info("🔄 Page will refresh automatically...")
             
             # Force a complete rerun
             st.rerun()
         
         st.markdown("---")
         st.subheader("📊 Status")
-        
-        if 'processing' not in st.session_state:
-            st.session_state.processing = False
-    
-    # Session State Initialization
-    if 'validation_report' not in st.session_state:
-        st.session_state.validation_report = None
-    if 'generated_resume' not in st.session_state:
-        st.session_state.generated_resume = None
-    if 'resume_text' not in st.session_state:
-        st.session_state.resume_text = None
     
     # Main Processing Logic
     if uploaded_file and jd_text:
@@ -963,11 +916,13 @@ def main():
             update_choice = st.radio(
                 "Do you want to update your resume as per employer's latest job profile?", 
                 ["Yes, generate optimized resume (85%+ match)", "No, I'm good with current resume"], 
-                horizontal=True
+                horizontal=True,
+                key=f"update_choice_{st.session_state.reset_counter}"
             )
             
             if update_choice == "Yes, generate optimized resume (85%+ match)":
-                if st.button("✨ Generate ATS Optimized Resume", type="primary"):
+                if st.button("✨ Generate ATS Optimized Resume", type="primary",
+                           key=f"generate_btn_{st.session_state.reset_counter}"):
                     with st.spinner("✍️ Generating new ATS-optimized resume (targeting 85%+ match)..."):
                         prompt = RESUME_GEN_USER_PROMPT.format(
                             resume_text=st.session_state.resume_text,
@@ -987,7 +942,7 @@ def main():
                             st.success("✅ Resume generated successfully! Target: 85%+ JD match")
                             st.rerun()
                         else:
-                            st.error("❌ Failed to generate resume. Please try again.")
+                            st.error("❌ Failed to generate resume. Please try again. If the issue persists, check your API key and credits.")
     
     elif uploaded_file and not jd_text:
         st.info("📝 **Please paste the Job Description to proceed.**")
@@ -1003,7 +958,8 @@ def main():
         
         # Show preview in expandable section
         with st.expander("👁️ Preview Resume Text", expanded=True):
-            st.text_area("Resume Preview", value=st.session_state.generated_resume, height=500)
+            st.text_area("Resume Preview", value=st.session_state.generated_resume, height=500,
+                       key=f"preview_text_{st.session_state.reset_counter}")
         
         # Generate PDF
         pdf_filename = "ATS_Optimized_Resume.pdf"
@@ -1023,7 +979,8 @@ def main():
                     data=pdf_bytes,
                     file_name=pdf_filename,
                     mime="application/pdf",
-                    type="primary"
+                    type="primary",
+                    key=f"download_btn_{st.session_state.reset_counter}"
                 )
                 
                 # Cleanup temp file
