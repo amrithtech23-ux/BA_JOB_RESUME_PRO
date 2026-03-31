@@ -185,9 +185,13 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
         st.error("❌ Error: System instruction is empty")
         return None
     
+    # Clean the prompt
+    prompt = clean_text_for_api(prompt)
+    system_instruction = clean_text_for_api(system_instruction)
+    
     # Check prompt length (OpenRouter has limits)
     prompt_length = len(prompt) + len(system_instruction)
-    max_safe_length = 100000  # Conservative limit
+    max_safe_length = 80000  # Conservative limit for safety
     
     if prompt_length > max_safe_length:
         st.warning(f"⚠️ Prompt is very long ({prompt_length} chars). Truncating...")
@@ -225,14 +229,15 @@ def call_openrouter_api(prompt, system_instruction, api_key, model="qwen/qwen-2.
             
             if response.status_code == 401:
                 st.error("🔑 Authentication failed. Please check your API key.")
-                st.info("💡 **Fix:** Go to Settings → Test API Connection or update your API key")
+                st.info("💡 **Fix:** Click 'Test API Connection' in sidebar or update your API key")
             elif response.status_code == 400:
                 st.error("📝 Bad request. The request format may be invalid.")
-                st.info("💡 **Fix:** Try uploading a different resume or shortening the job description")
+                st.info("💡 **Possible causes:**\n- Prompt too long\n- Special characters in text\n- Invalid model\n\n**Try:**\n1. Test API Connection in sidebar\n2. Try a different model (e.g., openai/gpt-3.5-turbo)\n3. Shorten your resume or job description\n4. Check your API credits at openrouter.ai")
             elif response.status_code == 429:
                 st.error("⏱️ Rate limit exceeded. Please wait 60 seconds and try again.")
             elif response.status_code == 500:
                 st.error("🔧 Server error. The API service may be temporarily unavailable.")
+                st.info("💡 **Try:** Wait a few minutes and try again, or use a different model")
             else:
                 st.error(f"Error details: {error_text}")
             
@@ -592,7 +597,7 @@ Job Description:
 Generate validation report in this EXACT format:
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                 IT-BUSINESS ANALYST RESUME VALIDATION REPORT                 ║
+║                 IT-BUSINESS ANALYST RESUME VALIDATION REPORT                  ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║   Candidate: [Name]                                                          ║
@@ -602,11 +607,11 @@ Generate validation report in this EXACT format:
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║   🎯 OVERALL ELIGIBILITY: [XX]%                                              ║
-║   ✅ GOOD MATCH - RECOMMENDED                                                ║
+║   ✅ GOOD MATCH - RECOMMENDED                                                 ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║   📈 SCORE BREAKDOWN:                                                        ║
+║   📈 SCORE BREAKDOWN:                                                         ║
 ║                                                                              ║
 ║   • Education:           [XX]%                                               ║
 ║   • Functional Skills:   [XX]%                                               ║
@@ -614,23 +619,23 @@ Generate validation report in this EXACT format:
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║   🔍 DETAILED ANALYSIS:                                                      ║
+║   🔍 DETAILED ANALYSIS:                                                       ║
 ║                                                                              ║
-║   ✅ Matched Skills:                                                         ║
-║      • [List skills]                                                         ║
+║   ✅ Matched Skills:                                                          ║
+║      • [List skills]                                                          ║
 ║                                                                              ║
-║   ❌ Missing Skills:                                                         ║
-║      • [List skills]                                                         ║
+║   ❌ Missing Skills:                                                          ║
+║      • [List skills]                                                          ║
 ║                                                                              ║
-║   ✅ Matched Experience:                                                     ║
-║      • [List experience]                                                     ║
+║   ✅ Matched Experience:                                                      ║
+║      • [List experience]                                                      ║
 ║                                                                              ║
-║   ❌ Missing Experience:                                                     ║
-║      • [List gaps]                                                           ║
+║   ❌ Missing Experience:                                                      ║
+║      • [List gaps]                                                            ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║   💡 RECOMMENDATIONS:                                                        ║
+║   💡 RECOMMENDATIONS:                                                         ║
 ║   1. [Recommendation 1]                                                      ║
 ║   2. [Recommendation 2]                                                      ║
 ║   3. [Recommendation 3]                                                      ║
@@ -700,7 +705,7 @@ def main():
         st.markdown("### 🤖 Model Settings")
         model = st.selectbox(
             "AI Model",
-            ["qwen/qwen-2.5-72b-instruct", "qwen/qwen-2.5-coder-32b-instruct", "openai/gpt-3.5-turbo"],
+            ["qwen/qwen-2.5-72b-instruct", "qwen/qwen-2.5-coder-32b-instruct", "openai/gpt-3.5-turbo", "anthropic/claude-3-haiku"],
             index=0,
             help="Qwen model for best results",
             key=f"model_select_{st.session_state.reset_counter}"
@@ -813,7 +818,7 @@ def main():
                         st.rerun()
                     else:
                         st.error("❌ Failed to generate validation report.")
-                        st.info("💡 **Troubleshooting:**\n- Click 'Test API Connection' in sidebar\n- Check your API credits at openrouter.ai\n- Try a different model (e.g., openai/gpt-3.5-turbo)\n- Shorten your resume or job description")
+                        st.info("💡 **Troubleshooting:**\n1. Click 'Test API Connection' in sidebar\n2. Check your API credits at openrouter.ai\n3. Try a different model (e.g., openai/gpt-3.5-turbo)\n4. Shorten your resume or job description\n5. Wait 60 seconds if rate limited")
         
         # Display Validation Report
         if st.session_state.validation_report:
@@ -858,7 +863,7 @@ def main():
                             st.rerun()
                         else:
                             st.error("❌ Failed to generate resume.")
-                            st.info("💡 **Troubleshooting:**\n- Check your API credits\n- Try a different model\n- Shorten the inputs\n- Wait 60 seconds if rate limited")
+                            st.info("💡 **Troubleshooting:**\n1. Check your API credits at openrouter.ai\n2. Try a different model (e.g., openai/gpt-3.5-turbo)\n3. Shorten the inputs\n4. Wait 60 seconds if rate limited")
     
     elif uploaded_file and not jd_text:
         st.info("📝 **Please paste the Job Description to proceed.**")
